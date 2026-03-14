@@ -33,7 +33,7 @@ namespace TinyHunter.Core.Inventory
 
         private void Start()
         {
-            var player = FindFirstObjectByType<PlayerController>();
+            var player = FindObjectOfType<PlayerController>();
             if (player != null)
             {
                 playerInventory = player.GetComponent<InventorySystem>();

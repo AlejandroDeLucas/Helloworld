@@ -27,7 +27,7 @@ namespace TinyHunter.MVP.Enemies
 
         private void Start()
         {
-            player = FindFirstObjectByType<PlayerController>();
+            player = FindObjectOfType<PlayerController>();
             if (player != null) playerStats = player.GetComponent<PlayerStats>();
             currentState = State.Hidden;
         }

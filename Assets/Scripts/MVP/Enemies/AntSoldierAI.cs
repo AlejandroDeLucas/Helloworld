@@ -29,7 +29,7 @@ namespace TinyHunter.MVP.Enemies
 
         private void Start()
         {
-            player = FindFirstObjectByType<PlayerController>();
+            player = FindObjectOfType<PlayerController>();
             currentState = State.Idle;
             stateTimer = idleDuration;
         }
