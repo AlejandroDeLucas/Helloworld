@@ -9,7 +9,6 @@ using UnityEngine;
 
 namespace TinyHunter.UI
 {
-    // Hotfix note: keep output item handling explicit for WeaponDefinition/ArmorDefinition craft equips.
     public class CraftingPanelUI : MonoBehaviour
     {
         [SerializeField] private CraftingSystem craftingSystem;
@@ -80,7 +79,6 @@ namespace TinyHunter.UI
 
         private void HandleCrafted(CraftingRecipeDefinition recipe)
         {
-            // Hotfix note: the crafted output can auto-equip when the recipe produces gear.
             checklist?.SetCraftedItem();
             if (recipe.OutputItem is WeaponDefinition weapon)
             {

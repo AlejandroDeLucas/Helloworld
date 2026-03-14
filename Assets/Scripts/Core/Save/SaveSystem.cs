@@ -9,7 +9,6 @@ using UnityEngine;
 
 namespace TinyHunter.Core.Save
 {
-    // Hotfix note: uses FindFirstObjectByType to avoid deprecated FindObjectOfType warnings.
     public class SaveSystem : MonoBehaviour
     {
         public static SaveSystem Instance { get; private set; }
@@ -38,10 +37,10 @@ namespace TinyHunter.Core.Save
 
         public void SaveGame()
         {
-            var inventory = FindFirstObjectByType<InventorySystem>();
-            var equipment = FindFirstObjectByType<EquipmentSystem>();
-            var questSystem = FindFirstObjectByType<QuestSystem>();
-            var customizer = FindFirstObjectByType<CharacterCustomizer>();
+            var inventory = FindObjectOfType<InventorySystem>();
+            var equipment = FindObjectOfType<EquipmentSystem>();
+            var questSystem = FindObjectOfType<QuestSystem>();
+            var customizer = FindObjectOfType<CharacterCustomizer>();
             if (inventory == null || equipment == null || questSystem == null) return;
 
             SaveData data = new();
@@ -75,10 +74,10 @@ namespace TinyHunter.Core.Save
         public void LoadGame()
         {
             if (!HasSave()) return;
-            var inventory = FindFirstObjectByType<InventorySystem>();
-            var equipment = FindFirstObjectByType<EquipmentSystem>();
-            var questSystem = FindFirstObjectByType<QuestSystem>();
-            var customizer = FindFirstObjectByType<CharacterCustomizer>();
+            var inventory = FindObjectOfType<InventorySystem>();
+            var equipment = FindObjectOfType<EquipmentSystem>();
+            var questSystem = FindObjectOfType<QuestSystem>();
+            var customizer = FindObjectOfType<CharacterCustomizer>();
             if (inventory == null || equipment == null || questSystem == null || itemDatabase == null) return;
 
             var json = File.ReadAllText(SavePath);
