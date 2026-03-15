@@ -9,7 +9,8 @@
 - **LMB**: Primary attack
 - **RMB**: Guard/block (if equipped weapon supports block)
 - **R**: Lock/Unlock target
-- **Left Shift**: Dodge roll
+- **Left Shift (hold)**: Sprint/Run while moving
+- **Left Shift (tap, no movement)**: Dodge roll
 - **Tab**: Toggle Inventory + Equipment panels
 - **Escape**: Close panels or open/close pause menu
 - **F5/F9**: Save/Load debug hotkeys
@@ -58,6 +59,13 @@ Canvas objects/scripts:
 - `DebugChecklistUI`
 - `PauseMenuUI`
 - `UIInputRouter`
+
+
+## HUD quick wiring checklist (avoid "New Text")
+- In `PlayerHUD`, assign `playerStats`, `lockSystem`, `healthBar`, `staminaBar`, `targetText`.
+- In `QuestHUD`, assign `questSystem`, `activeQuestText`, `progressText`.
+- In `InteractionPromptUI`, assign `root` + `promptText` and set root inactive by default.
+- Replace placeholder labels in scene (`New Text`) with intended HUD text objects and ensure they are referenced by the scripts above.
 
 ## Hub_MVP contents
 - Player spawn

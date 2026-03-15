@@ -15,6 +15,7 @@ namespace TinyHunter.Core.Input
         public bool JumpPressed => activeSource != null && activeSource.JumpPressed;
         public bool CrouchTogglePressed => activeSource != null && activeSource.CrouchTogglePressed;
         public bool DodgePressed => activeSource != null && activeSource.DodgePressed;
+        public bool SprintHeld => activeSource != null && activeSource.SprintHeld;
         public bool InteractPressed => activeSource != null && activeSource.InteractPressed;
         public bool PrimaryAttackPressed => activeSource != null && activeSource.PrimaryAttackPressed;
         public bool GuardHeld => activeSource != null && activeSource.GuardHeld;

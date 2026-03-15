@@ -10,6 +10,7 @@ namespace TinyHunter.Core.Input
         bool JumpPressed { get; }
         bool CrouchTogglePressed { get; }
         bool DodgePressed { get; }
+        bool SprintHeld { get; }
         bool InteractPressed { get; }
         bool PrimaryAttackPressed { get; }
         bool GuardHeld { get; }

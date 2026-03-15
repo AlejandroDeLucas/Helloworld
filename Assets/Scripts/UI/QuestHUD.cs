@@ -11,6 +11,13 @@ namespace TinyHunter.UI
         [SerializeField] private Text activeQuestText;
         [SerializeField] private Text progressText;
 
+        private void Awake()
+        {
+            if (questSystem == null) questSystem = FindFirstObjectByType<QuestSystem>();
+            if (activeQuestText != null && string.IsNullOrWhiteSpace(activeQuestText.text)) activeQuestText.text = "Quest: None";
+            if (progressText != null && string.IsNullOrWhiteSpace(progressText.text)) progressText.text = "Progress: 0/0";
+        }
+
         private void OnEnable()
         {
             if (questSystem == null) return;

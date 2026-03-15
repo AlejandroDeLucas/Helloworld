@@ -12,6 +12,24 @@ namespace TinyHunter.UI
         [SerializeField] private Slider staminaBar;
         [SerializeField] private Text targetText;
 
+        private void Awake()
+        {
+            if (playerStats == null) playerStats = FindFirstObjectByType<PlayerStats>();
+            if (lockSystem == null) lockSystem = FindFirstObjectByType<TargetLockSystem>();
+            if (targetText != null && string.IsNullOrWhiteSpace(targetText.text)) targetText.text = "Target: None";
+            if (healthBar != null)
+            {
+                healthBar.minValue = 0f;
+                healthBar.maxValue = 1f;
+            }
+
+            if (staminaBar != null)
+            {
+                staminaBar.minValue = 0f;
+                staminaBar.maxValue = 1f;
+            }
+        }
+
         private void OnEnable()
         {
             if (playerStats == null) return;

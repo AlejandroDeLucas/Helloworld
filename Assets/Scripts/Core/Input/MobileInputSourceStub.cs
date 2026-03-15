@@ -10,6 +10,7 @@ namespace TinyHunter.Core.Input
         public bool JumpPressed { get; private set; }
         public bool CrouchTogglePressed { get; private set; }
         public bool DodgePressed { get; private set; }
+        public bool SprintHeld { get; private set; }
         public bool InteractPressed { get; private set; }
         public bool PrimaryAttackPressed { get; private set; }
         public bool GuardHeld { get; private set; }
@@ -25,6 +26,7 @@ namespace TinyHunter.Core.Input
         public void PressJump() => JumpPressed = true;
         public void ToggleCrouch() => CrouchTogglePressed = true;
         public void PressDodge() => DodgePressed = true;
+        public void SetSprint(bool value) => SprintHeld = value;
         public void PressInteract() => InteractPressed = true;
         public void PressPrimaryAttack() => PrimaryAttackPressed = true;
         public void SetGuard(bool value) => GuardHeld = value;

@@ -19,6 +19,7 @@ namespace TinyHunter.Core.Player
         [SerializeField] private float dodgeStaminaCost = 20f;
         [SerializeField] private float dodgeDuration = 0.22f;
         [SerializeField] private float crouchSpeedMultiplier = 0.65f;
+        [SerializeField] private float sprintSpeedMultiplier = 1.7f;
         [SerializeField] private PlayerAnimationBridge animationBridge;
 
         public bool IsCrouching { get; private set; }
@@ -64,7 +65,7 @@ namespace TinyHunter.Core.Player
                 return;
             }
 
-            if (input.DodgePressed && stats.SpendStamina(dodgeStaminaCost))
+            if (input.DodgePressed && input.Move.sqrMagnitude < 0.01f && stats.SpendStamina(dodgeStaminaCost))
             {
                 StartDodge();
                 return;
@@ -100,8 +101,13 @@ namespace TinyHunter.Core.Player
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(move), Time.deltaTime * 10f);
             }
 
-            float speed = stats.MoveSpeed * (IsCrouching ? crouchSpeedMultiplier : 1f);
-            float normalizedMoveSpeed = moveInput.magnitude;
+            bool isMoving = moveInput.sqrMagnitude > 0.01f;
+            bool isSprinting = isMoving && !IsCrouching && input.SprintHeld;
+
+            float movementMultiplier = IsCrouching ? crouchSpeedMultiplier : (isSprinting ? sprintSpeedMultiplier : 1f);
+            float speed = stats.MoveSpeed * movementMultiplier;
+
+            float normalizedMoveSpeed = !isMoving ? 0f : (isSprinting ? 1f : 0.5f);
             animationBridge?.SetMoveSpeed(normalizedMoveSpeed);
             controller.Move(move * speed * Time.deltaTime);
         }

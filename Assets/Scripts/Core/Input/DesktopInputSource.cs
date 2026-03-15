@@ -10,6 +10,7 @@ namespace TinyHunter.Core.Input
         public bool JumpPressed => UnityEngine.Input.GetKeyDown(KeyCode.Space);
         public bool CrouchTogglePressed => UnityEngine.Input.GetKeyDown(KeyCode.C);
         public bool DodgePressed => UnityEngine.Input.GetKeyDown(KeyCode.LeftShift);
+        public bool SprintHeld => UnityEngine.Input.GetKey(KeyCode.LeftShift);
         public bool InteractPressed => UnityEngine.Input.GetKeyDown(KeyCode.E);
         public bool PrimaryAttackPressed => UnityEngine.Input.GetMouseButtonDown(0);
         public bool GuardHeld => UnityEngine.Input.GetMouseButton(1);
