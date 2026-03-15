@@ -142,12 +142,15 @@ Put hair under `HairSocket`.
 2. Create an Animator Controller:
    - `AC_Player`
 3. Add parameters/triggers:
+   - `MoveSpeed` (float, for idle/run blend)
    - `LightAttack`
    - `HeavyAttack`
    - `Dodge`
    - `Hit`
    - `Death`
-4. Assign `Animator` reference in `PlayerAnimationBridge`.
+4. Make Idle loop and Run loop clips in the controller.
+5. Create transitions (or a blend tree) so `MoveSpeed` > 0.1 goes to Run, and `MoveSpeed` <= 0.1 goes back to Idle.
+6. Assign `Animator` reference in `PlayerAnimationBridge`.
 
 If you don’t finish state machine now, it’s okay. Triggers can stay ready.
 
@@ -190,6 +193,7 @@ After importing, press Play and test:
 - **Pink model**: material/shader missing.
 - **Model too big/small**: set import scale in model import settings.
 - **No animation**: Animator controller not assigned.
+- **Downloaded from Mixamo but model is invisible**: you may have imported an animation-only FBX (no mesh). Download a character with skin (mesh) and use that as the visible model, then apply your animation clips to it.
 - **No hit detection**: forgot colliders or `MonsterPartHitbox` IDs.
 - **Character creator breaks MVP**: forgot to keep `applyOnStart` disabled.
 

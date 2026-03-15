@@ -51,13 +51,18 @@ namespace TinyHunter.Core.Player
         {
             if (CurrentState == PlayerState.Dodging)
             {
+                animationBridge?.SetMoveSpeed(0f);
                 stateTimer -= Time.deltaTime;
                 if (stateTimer <= 0f) CurrentState = PlayerState.Movement;
                 ApplyGravity();
                 return;
             }
 
-            if (CurrentState == PlayerState.Interacting || CurrentState == PlayerState.Attacking) return;
+            if (CurrentState == PlayerState.Interacting || CurrentState == PlayerState.Attacking)
+            {
+                animationBridge?.SetMoveSpeed(0f);
+                return;
+            }
 
             if (input.DodgePressed && stats.SpendStamina(dodgeStaminaCost))
             {
@@ -96,6 +101,8 @@ namespace TinyHunter.Core.Player
             }
 
             float speed = stats.MoveSpeed * (IsCrouching ? crouchSpeedMultiplier : 1f);
+            float normalizedMoveSpeed = moveInput.magnitude;
+            animationBridge?.SetMoveSpeed(normalizedMoveSpeed);
             controller.Move(move * speed * Time.deltaTime);
         }
 
