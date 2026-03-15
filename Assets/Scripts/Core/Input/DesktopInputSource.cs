@@ -5,7 +5,7 @@ namespace TinyHunter.Core.Input
     public class DesktopInputSource : MonoBehaviour, IGameInputSource
     {
         public Vector2 Move => new(UnityEngine.Input.GetAxisRaw("Horizontal"), UnityEngine.Input.GetAxisRaw("Vertical"));
-        public Vector2 Look => new(UnityEngine.Input.GetAxis("Mouse X"), UnityEngine.Input.GetAxis("Mouse Y"));
+        public Vector2 Look => new(UnityEngine.Input.GetAxisRaw("Mouse X"), UnityEngine.Input.GetAxisRaw("Mouse Y"));
 
         public bool JumpPressed => UnityEngine.Input.GetKeyDown(KeyCode.Space);
         public bool CrouchTogglePressed => UnityEngine.Input.GetKeyDown(KeyCode.C);

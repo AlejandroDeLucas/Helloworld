@@ -10,6 +10,7 @@ namespace TinyHunter.Core.Camera
         [SerializeField] private Vector3 offset = new(0f, 0.9f, -2.5f);
         [SerializeField] private float smoothSpeed = 8f;
         [SerializeField] private float lookSensitivity = 180f;
+        [SerializeField] private bool scaleLookByDeltaTime;
         [SerializeField] private float minPitch = -20f;
         [SerializeField] private float maxPitch = 45f;
 
@@ -21,8 +22,9 @@ namespace TinyHunter.Core.Camera
             if (target == null || input == null) return;
 
             Vector2 look = ShouldApplyLookInput() ? input.Look : Vector2.zero;
-            yaw += look.x * lookSensitivity * Time.deltaTime;
-            pitch -= look.y * lookSensitivity * Time.deltaTime;
+            float lookScale = scaleLookByDeltaTime ? Time.deltaTime : 1f;
+            yaw += look.x * lookSensitivity * lookScale;
+            pitch -= look.y * lookSensitivity * lookScale;
             pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
 
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
