@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace TinyHunter.Core.Inventory
 {
+    // Hotfix note: startup lookup uses FindFirstObjectByType to stay current with Unity API changes.
     public class WorldPickup : MonoBehaviour
     {
         [SerializeField] private ItemDefinition item;
@@ -33,7 +34,7 @@ namespace TinyHunter.Core.Inventory
 
         private void Start()
         {
-            var player = FindObjectOfType<PlayerController>();
+            var player = FindFirstObjectByType<PlayerController>();
             if (player != null)
             {
                 playerInventory = player.GetComponent<InventorySystem>();

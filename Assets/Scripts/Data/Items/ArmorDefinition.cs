@@ -1,14 +1,18 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace TinyHunter.Data.Items
 {
     public enum ArmorSlot { Head, Chest, Arms, Waist, Legs }
 
     [CreateAssetMenu(menuName = "TinyHunter/Data/Armor")]
-    public class ArmorDefinition : ScriptableObject
+    // Hotfix note: ArmorDefinition must inherit ItemDefinition for crafting/equipment compatibility.
+    public class ArmorDefinition : ItemDefinition
     {
-        public string ArmorId;
-        public string DisplayName;
+        [FormerlySerializedAs("ArmorId")]
+        [Header("Armor")]
+        public string ArmorLegacyId;
+
         public ArmorSlot Slot;
         public int Defense;
         public float PoisonResistance;
@@ -17,5 +21,14 @@ namespace TinyHunter.Data.Items
         public float ImpactResistance;
         public float StaminaModifier;
         public float DodgeEfficiencyModifier;
+
+        private void OnValidate()
+        {
+            Category = ItemCategory.Armor;
+            if (!string.IsNullOrEmpty(ArmorLegacyId) && string.IsNullOrEmpty(ItemId))
+            {
+                ItemId = ArmorLegacyId;
+            }
+        }
     }
 }

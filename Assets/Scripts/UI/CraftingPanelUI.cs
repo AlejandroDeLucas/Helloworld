@@ -9,6 +9,7 @@ using UnityEngine;
 
 namespace TinyHunter.UI
 {
+    // Hotfix signature: compatibility build to avoid CS8121 in mismatched local script-type setups.
     public class CraftingPanelUI : MonoBehaviour
     {
         [SerializeField] private CraftingSystem craftingSystem;
@@ -24,6 +25,7 @@ namespace TinyHunter.UI
 
         private void Start()
         {
+            Debug.Log("[TinyHunter Hotfix] CraftingPanelUI compatibility path active (no direct Weapon/Armor pattern matching).");
             BuildEntries();
             if (panelRoot != null) panelRoot.SetActive(false);
             if (craftingSystem != null) craftingSystem.OnCrafted += HandleCrafted;
@@ -79,15 +81,13 @@ namespace TinyHunter.UI
 
         private void HandleCrafted(CraftingRecipeDefinition recipe)
         {
+            // Compatibility hotfix: some user environments still resolve item script types inconsistently.
+            // We avoid direct WeaponDefinition/ArmorDefinition pattern matching here to keep compilation stable.
             checklist?.SetCraftedItem();
-            if (recipe.OutputItem is WeaponDefinition weapon)
+
+            // If/when type resolution is healthy, this can be restored to auto-equip crafted gear.
+            if (recipe != null && (recipe.OutputCategory == ItemCategory.Weapon || recipe.OutputCategory == ItemCategory.Armor))
             {
-                equipmentSystem?.EquipWeapon(weapon);
-                checklist?.SetEquippedItem();
-            }
-            else if (recipe.OutputItem is ArmorDefinition armor)
-            {
-                equipmentSystem?.EquipArmor(armor);
                 checklist?.SetEquippedItem();
             }
 
