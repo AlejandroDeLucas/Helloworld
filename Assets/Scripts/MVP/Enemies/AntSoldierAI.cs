@@ -5,7 +5,6 @@ using UnityEngine.AI;
 namespace TinyHunter.MVP.Enemies
 {
     [RequireComponent(typeof(NavMeshAgent))]
-    // Hotfix note: player discovery uses FindFirstObjectByType to avoid deprecation warnings.
     public class AntSoldierAI : MonoBehaviour
     {
         private enum State { Idle, Patrol, Chase, Attack, Recover, ReturnToNest }
@@ -30,7 +29,7 @@ namespace TinyHunter.MVP.Enemies
 
         private void Start()
         {
-            player = FindFirstObjectByType<PlayerController>();
+            player = FindObjectOfType<PlayerController>();
             currentState = State.Idle;
             stateTimer = idleDuration;
         }

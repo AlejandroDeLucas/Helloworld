@@ -6,7 +6,6 @@ using UnityEngine.AI;
 namespace TinyHunter.MVP.Enemies
 {
     [RequireComponent(typeof(NavMeshAgent))]
-    // Hotfix note: player discovery uses FindFirstObjectByType to avoid deprecation warnings.
     public class SpiderAmbushAI : MonoBehaviour
     {
         private enum State { Hidden, AmbushReady, Lunge, Recover, RetreatToWeb }
@@ -28,7 +27,7 @@ namespace TinyHunter.MVP.Enemies
 
         private void Start()
         {
-            player = FindFirstObjectByType<PlayerController>();
+            player = FindObjectOfType<PlayerController>();
             if (player != null) playerStats = player.GetComponent<PlayerStats>();
             currentState = State.Hidden;
         }

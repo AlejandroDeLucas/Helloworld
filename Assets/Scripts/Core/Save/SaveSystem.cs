@@ -1,5 +1,6 @@
 using System.IO;
 using TinyHunter.Core.Character;
+using TinyHunter.Core.Equipment;
 using TinyHunter.Core.Inventory;
 using TinyHunter.Core.Quest;
 using TinyHunter.Data.Items;
@@ -8,7 +9,6 @@ using UnityEngine;
 
 namespace TinyHunter.Core.Save
 {
-    // Hotfix note: uses FindFirstObjectByType to avoid deprecated FindObjectOfType warnings.
     public class SaveSystem : MonoBehaviour
     {
         public static SaveSystem Instance { get; private set; }
@@ -37,10 +37,11 @@ namespace TinyHunter.Core.Save
 
         public void SaveGame()
         {
-            var inventory = FindFirstObjectByType<InventorySystem>();
-            var questSystem = FindFirstObjectByType<QuestSystem>();
-            var customizer = FindFirstObjectByType<CharacterCustomizer>();
-            if (inventory == null || questSystem == null) return;
+            var inventory = FindObjectOfType<InventorySystem>();
+            var equipment = FindObjectOfType<EquipmentSystem>();
+            var questSystem = FindObjectOfType<QuestSystem>();
+            var customizer = FindObjectOfType<CharacterCustomizer>();
+            if (inventory == null || equipment == null || questSystem == null) return;
 
             SaveData data = new();
             foreach (var entry in inventory.Entries)
@@ -49,9 +50,8 @@ namespace TinyHunter.Core.Save
                 data.inventory.Add(new SaveInventoryEntry { itemId = entry.Item.ItemId, quantity = entry.Quantity });
             }
 
-            // Compatibility hotfix: avoid direct weapon/armor ItemId access when script type inheritance is unresolved.
-            data.equippedWeaponId = null;
-            data.equippedHeadArmorId = null;
+            data.equippedWeaponId = equipment.EquippedWeapon != null ? equipment.EquippedWeapon.ItemId : null;
+            data.equippedHeadArmorId = equipment.EquippedHead != null ? equipment.EquippedHead.ItemId : null;
             data.activeQuestId = questSystem.ActiveQuest != null ? questSystem.ActiveQuest.QuestId : null;
 
             if (data.profile == null) data.profile = new PlayerProfileData();
@@ -74,10 +74,11 @@ namespace TinyHunter.Core.Save
         public void LoadGame()
         {
             if (!HasSave()) return;
-            var inventory = FindFirstObjectByType<InventorySystem>();
-            var questSystem = FindFirstObjectByType<QuestSystem>();
-            var customizer = FindFirstObjectByType<CharacterCustomizer>();
-            if (inventory == null || questSystem == null || itemDatabase == null) return;
+            var inventory = FindObjectOfType<InventorySystem>();
+            var equipment = FindObjectOfType<EquipmentSystem>();
+            var questSystem = FindObjectOfType<QuestSystem>();
+            var customizer = FindObjectOfType<CharacterCustomizer>();
+            if (inventory == null || equipment == null || questSystem == null || itemDatabase == null) return;
 
             var json = File.ReadAllText(SavePath);
             var data = JsonUtility.FromJson<SaveData>(json);
@@ -90,8 +91,17 @@ namespace TinyHunter.Core.Save
                 if (item != null) inventory.AddItem(item, saved.quantity);
             }
 
-            // Compatibility hotfix: skip typed equipment restore until all environments resolve item inheritance consistently.
-            // Inventory and quest restore remain fully functional.
+            if (!string.IsNullOrEmpty(data.equippedWeaponId))
+            {
+                var weapon = itemDatabase.FindById<WeaponDefinition>(data.equippedWeaponId);
+                if (weapon != null) equipment.EquipWeapon(weapon);
+            }
+
+            if (!string.IsNullOrEmpty(data.equippedHeadArmorId))
+            {
+                var armor = itemDatabase.FindById<ArmorDefinition>(data.equippedHeadArmorId);
+                if (armor != null) equipment.EquipArmor(armor);
+            }
 
             if (!string.IsNullOrEmpty(data.activeQuestId))
             {

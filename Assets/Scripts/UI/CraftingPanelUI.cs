@@ -9,7 +9,6 @@ using UnityEngine;
 
 namespace TinyHunter.UI
 {
-    // Hotfix note: keep output item handling explicit for WeaponDefinition/ArmorDefinition craft equips.
     public class CraftingPanelUI : MonoBehaviour
     {
         [SerializeField] private CraftingSystem craftingSystem;
@@ -80,13 +79,15 @@ namespace TinyHunter.UI
 
         private void HandleCrafted(CraftingRecipeDefinition recipe)
         {
-            // Compatibility hotfix: some user environments still resolve item script types inconsistently.
-            // We avoid direct WeaponDefinition/ArmorDefinition pattern matching here to keep compilation stable.
             checklist?.SetCraftedItem();
-
-            // If/when type resolution is healthy, this can be restored to auto-equip crafted gear.
-            if (recipe != null && (recipe.OutputCategory == ItemCategory.Weapon || recipe.OutputCategory == ItemCategory.Armor))
+            if (recipe.OutputItem is WeaponDefinition weapon)
             {
+                equipmentSystem?.EquipWeapon(weapon);
+                checklist?.SetEquippedItem();
+            }
+            else if (recipe.OutputItem is ArmorDefinition armor)
+            {
+                equipmentSystem?.EquipArmor(armor);
                 checklist?.SetEquippedItem();
             }
 

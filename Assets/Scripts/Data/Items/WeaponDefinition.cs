@@ -1,6 +1,5 @@
 using TinyHunter.Data.Combat;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace TinyHunter.Data.Items
 {
@@ -14,13 +13,10 @@ namespace TinyHunter.Data.Items
     }
 
     [CreateAssetMenu(menuName = "TinyHunter/Data/Weapon")]
-    // Hotfix note: WeaponDefinition must inherit ItemDefinition for crafting/equipment compatibility.
-    public class WeaponDefinition : ItemDefinition
+    public class WeaponDefinition : ScriptableObject
     {
-        [FormerlySerializedAs("WeaponId")]
-        [Header("Weapon")]
-        public string WeaponLegacyId;
-
+        public string WeaponId;
+        public string DisplayName;
         public WeaponClass WeaponClass;
         public DamageType DamageType;
         public float AttackPower = 10f;
@@ -29,14 +25,5 @@ namespace TinyHunter.Data.Items
         public float Reach = 1.2f;
         public bool CanBlock;
         public float GuardDamageReduction = 0.5f;
-
-        private void OnValidate()
-        {
-            Category = ItemCategory.Weapon;
-            if (!string.IsNullOrEmpty(WeaponLegacyId) && string.IsNullOrEmpty(ItemId))
-            {
-                ItemId = WeaponLegacyId;
-            }
-        }
     }
 }
