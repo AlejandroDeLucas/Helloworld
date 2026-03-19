@@ -9,8 +9,8 @@ namespace TinyHunter.Core.Camera
         [SerializeField] private PlayerInputReader input;
         [SerializeField] private Vector3 offset = new(0f, 0.9f, -2.5f);
         [SerializeField] private float smoothSpeed = 8f;
-        [SerializeField] private float lookSensitivity = 180f;
-        [SerializeField] private bool scaleLookByDeltaTime;
+        [SerializeField] private float lookSensitivity = 120f;
+        [SerializeField] private bool scaleLookByDeltaTime = true;
         [SerializeField] private float minPitch = -20f;
         [SerializeField] private float maxPitch = 45f;
 
