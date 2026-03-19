@@ -15,6 +15,9 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private bool rotateTowardPlayerInRange = true;
         [SerializeField] private float turnSpeed = 360f;
         [SerializeField] private bool modelForwardIsReversed = true;
+        [SerializeField] private bool moveTowardPlayerInRange = true;
+        [SerializeField] private float moveSpeed = 1.5f;
+        [SerializeField] private float stopDistance = 1.2f;
 
         [Header("Future Detection - Disabled By Default")]
         [SerializeField] private bool useVision;
@@ -66,6 +69,11 @@ namespace TinyHunter.MVP.Enemies
             if (isPlayerNear && rotateTowardPlayerInRange)
             {
                 RotateTowardPlayer();
+            }
+
+            if (isPlayerNear && moveTowardPlayerInRange)
+            {
+                MoveTowardPlayer();
             }
         }
 
@@ -126,6 +134,18 @@ namespace TinyHunter.MVP.Enemies
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
         }
 
+        private void MoveTowardPlayer()
+        {
+            Vector3 offset = playerTarget.position - transform.position;
+            offset.y = 0f;
+
+            float distance = offset.magnitude;
+            if (distance <= stopDistance || distance <= 0.0001f) return;
+
+            Vector3 moveDirection = offset / distance;
+            transform.position += moveDirection * (moveSpeed * Time.deltaTime);
+        }
+
         private static Transform FindPlayerTarget()
         {
             GameObject player = GameObject.Find("Player");
@@ -136,6 +156,12 @@ namespace TinyHunter.MVP.Enemies
         {
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(transform.position, proximityRange);
+
+            if (moveTowardPlayerInRange)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawWireSphere(transform.position, stopDistance);
+            }
 
             if (useVision)
             {
