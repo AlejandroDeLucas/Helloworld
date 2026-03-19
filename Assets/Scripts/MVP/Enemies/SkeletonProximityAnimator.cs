@@ -14,6 +14,7 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private float proximityRange = 4f;
         [SerializeField] private bool rotateTowardPlayerInRange = true;
         [SerializeField] private float turnSpeed = 360f;
+        [SerializeField] private bool modelForwardIsReversed = true;
 
         [Header("Future Detection - Disabled By Default")]
         [SerializeField] private bool useVision;
@@ -119,6 +120,7 @@ namespace TinyHunter.MVP.Enemies
             direction.y = 0f;
 
             if (direction.sqrMagnitude <= 0.0001f) return;
+            if (modelForwardIsReversed) direction = -direction;
 
             Quaternion targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
