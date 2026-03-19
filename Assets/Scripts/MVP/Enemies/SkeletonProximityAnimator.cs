@@ -12,6 +12,8 @@ namespace TinyHunter.MVP.Enemies
 
         [Header("Current MVP Detection")]
         [SerializeField] private float proximityRange = 4f;
+        [SerializeField] private bool rotateTowardPlayerInRange = true;
+        [SerializeField] private float turnSpeed = 360f;
 
         [Header("Future Detection - Disabled By Default")]
         [SerializeField] private bool useVision;
@@ -59,6 +61,11 @@ namespace TinyHunter.MVP.Enemies
             }
 
             skeletonAnimator.SetBool(IsPlayerNearHash, isPlayerNear);
+
+            if (isPlayerNear && rotateTowardPlayerInRange)
+            {
+                RotateTowardPlayer();
+            }
         }
 
         public void RegisterNoise(Vector3 noisePosition, float noiseRadius)
@@ -104,6 +111,17 @@ namespace TinyHunter.MVP.Enemies
         private bool HasRecentHearingContact()
         {
             return Time.time - lastHeardTime <= hearingMemoryDuration;
+        }
+
+        private void RotateTowardPlayer()
+        {
+            Vector3 direction = playerTarget.position - transform.position;
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude <= 0.0001f) return;
+
+            Quaternion targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
         }
 
         private static Transform FindPlayerTarget()
