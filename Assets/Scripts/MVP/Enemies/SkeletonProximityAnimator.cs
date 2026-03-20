@@ -19,6 +19,7 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private bool rotateTowardPlayerInRange = true;
         [SerializeField] private float turnSpeed = 360f;
         [SerializeField] private bool modelForwardIsReversed = true;
+        [SerializeField] private float additionalFacingYawOffset;
         [SerializeField] private bool moveTowardPlayerInRange = true;
         [SerializeField] private float moveSpeed = 1.5f;
         [SerializeField] private float stopDistance = 1.2f;
@@ -242,9 +243,10 @@ namespace TinyHunter.MVP.Enemies
             direction.y = 0f;
 
             if (direction.sqrMagnitude <= 0.0001f) return;
-            if (modelForwardIsReversed) direction = -direction;
 
             Quaternion targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            float yawOffset = additionalFacingYawOffset + (modelForwardIsReversed ? 180f : 0f);
+            targetRotation *= Quaternion.Euler(0f, yawOffset, 0f);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
         }
 
@@ -292,7 +294,8 @@ namespace TinyHunter.MVP.Enemies
         private void UpdateAttackState()
         {
             attackTimer -= Time.deltaTime;
-            if (attackTimer <= 0f)
+            bool animationFinished = animationBridge != null && animationBridge.IsCurrentAnimationFinished();
+            if (animationFinished || attackTimer <= 0f)
             {
                 EndAttack();
             }

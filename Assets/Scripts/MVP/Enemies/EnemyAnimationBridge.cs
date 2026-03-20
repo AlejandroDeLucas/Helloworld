@@ -11,6 +11,7 @@ namespace TinyHunter.MVP.Enemies
         private static readonly int IsDyingHash = Animator.StringToHash("IsDying");
 
         [SerializeField] private Animator animator;
+        [SerializeField] private bool useAnimatorRootMotion;
         [SerializeField] private float hitReactionDuration = 0.25f;
         [SerializeField] private bool canInterruptAttackWithHitReaction;
 
@@ -22,6 +23,12 @@ namespace TinyHunter.MVP.Enemies
         private void Reset()
         {
             if (animator == null) animator = GetComponentInChildren<Animator>();
+            ApplyAnimatorSettings();
+        }
+
+        private void Awake()
+        {
+            ApplyAnimatorSettings();
         }
 
         public void SetMoving(bool isMoving)
@@ -77,12 +84,30 @@ namespace TinyHunter.MVP.Enemies
             animator.SetBool(IsDyingHash, true);
         }
 
+        public bool IsCurrentAnimationFinished(float normalizedThreshold = 0.98f)
+        {
+            if (animator == null || animator.IsInTransition(0)) return false;
+            AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+            return stateInfo.normalizedTime >= normalizedThreshold;
+        }
+
+        private void OnValidate()
+        {
+            ApplyAnimatorSettings();
+        }
+
         private IEnumerator HitReactionRoutine()
         {
             animator.SetBool(IsGettingHitHash, true);
             yield return new WaitForSeconds(hitReactionDuration);
             animator.SetBool(IsGettingHitHash, false);
             hitReactionRoutine = null;
+        }
+
+        private void ApplyAnimatorSettings()
+        {
+            if (animator == null) return;
+            animator.applyRootMotion = useAnimatorRootMotion;
         }
     }
 }
