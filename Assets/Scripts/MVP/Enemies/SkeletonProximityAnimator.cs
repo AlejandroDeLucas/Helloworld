@@ -29,6 +29,7 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private bool canAttack = true;
         [SerializeField] private float attackRange = 1.6f;
         [SerializeField] private float attackCooldown = 1.25f;
+        [SerializeField] private bool useFallbackAttackTimer;
         [SerializeField] private float fallbackAttackDuration = 0.9f;
 
         [Header("Optional Patrol")]
@@ -295,7 +296,7 @@ namespace TinyHunter.MVP.Enemies
         {
             attackTimer -= Time.deltaTime;
             bool animationFinished = animationBridge != null && animationBridge.IsCurrentAnimationFinished();
-            if (animationFinished || attackTimer <= 0f)
+            if (animationFinished || (useFallbackAttackTimer && attackTimer <= 0f))
             {
                 EndAttack();
             }
