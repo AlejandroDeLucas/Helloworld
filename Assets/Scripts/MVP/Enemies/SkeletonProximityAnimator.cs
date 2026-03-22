@@ -3,7 +3,9 @@ using UnityEngine.AI;
 
 namespace TinyHunter.MVP.Enemies
 {
-    public class SkeletonProximityAnimator : MonoBehaviour
+    [RequireComponent(typeof(CapsuleCollider))]
+    [RequireComponent(typeof(NavMeshAgent))]
+    public class SkeletonProximityAnimator : MonoBehaviour, TinyHunter.Core.Combat.ITemporaryInvulnerabilityProvider
     {
         private static readonly int IsPlayerNearHash = Animator.StringToHash("IsPlayerNear");
 
@@ -13,6 +15,8 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private EnemyAnimationBridge animationBridge;
         [SerializeField] private EnemyMeleeDamageHitbox meleeHitbox;
         [SerializeField] private NavMeshAgent navigationAgent;
+        [SerializeField] private CapsuleCollider bodyCollider;
+        [SerializeField] private Rigidbody physicsBody;
 
         [Header("Current MVP Detection")]
         [SerializeField] private float proximityRange = 4f;
@@ -24,6 +28,30 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private float moveSpeed = 1.5f;
         [SerializeField] private float stopDistance = 1.2f;
         [SerializeField] private bool useNavMeshIfAvailable = true;
+        [SerializeField] private bool allowDirectMovementFallback;
+
+        [Header("Solid Body / Path Blocking")]
+        [SerializeField] private bool configureSolidBodyOnAwake = true;
+        [SerializeField] private Vector3 colliderCenter = new(0f, 0.9f, 0f);
+        [SerializeField] private float colliderHeight = 1.8f;
+        [SerializeField] private float colliderRadius = 0.35f;
+        [SerializeField] private LayerMask movementBlockers = Physics.DefaultRaycastLayers;
+        [SerializeField] private float directMoveCastPadding = 0.05f;
+        [SerializeField] private float directMoveStepHeight = 0.2f;
+        [SerializeField] private float directMoveAvoidanceAngle = 35f;
+        [SerializeField] private int directMoveAvoidanceChecksPerSide = 3;
+        [SerializeField] private NavMeshPathStatus requiredPathStatus = NavMeshPathStatus.PathComplete;
+        [SerializeField, Range(0, 99)] private int avoidancePriority = 50;
+        [SerializeField] private ObstacleAvoidanceType obstacleAvoidance = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+
+        [Header("Respawn / Spawn Intro")]
+        [SerializeField] private bool playRespawnSequenceOnEnable = true;
+        [SerializeField] private float respawnSequenceDuration = 1.1f;
+        [SerializeField] private bool invulnerableDuringRespawn = true;
+        [SerializeField] private bool useFallbackRespawnTimer = true;
+        [SerializeField] private bool applyRespawnMovementOffset;
+        [SerializeField] private Vector3 respawnMovementOffset = new(0f, 0f, -0.35f);
+        [SerializeField] private AnimationCurve respawnMovementCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
         [Header("Combat")]
         [SerializeField] private bool canAttack = true;
@@ -53,6 +81,12 @@ namespace TinyHunter.MVP.Enemies
         private float patrolWaitTimer;
         private int patrolIndex;
         private Vector3 lastPosition;
+        private bool isRespawning;
+        private float respawnTimer;
+        private Vector3 respawnStartPosition;
+        private Vector3 respawnTargetPosition;
+
+        public bool IsInvulnerable => isRespawning && invulnerableDuringRespawn;
 
         private void Reset()
         {
@@ -60,6 +94,9 @@ namespace TinyHunter.MVP.Enemies
             if (animationBridge == null) animationBridge = GetComponent<EnemyAnimationBridge>();
             if (meleeHitbox == null) meleeHitbox = GetComponentInChildren<EnemyMeleeDamageHitbox>();
             if (navigationAgent == null) navigationAgent = GetComponent<NavMeshAgent>();
+            if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider>();
+            if (physicsBody == null) physicsBody = GetComponent<Rigidbody>();
+            ConfigureSolidBody();
         }
 
         private void Awake()
@@ -69,12 +106,31 @@ namespace TinyHunter.MVP.Enemies
             if (animationBridge == null) animationBridge = GetComponent<EnemyAnimationBridge>();
             if (meleeHitbox == null) meleeHitbox = GetComponentInChildren<EnemyMeleeDamageHitbox>();
             if (navigationAgent == null) navigationAgent = GetComponent<NavMeshAgent>();
+            if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider>();
+            if (physicsBody == null) physicsBody = GetComponent<Rigidbody>();
             lastPosition = transform.position;
+
+            if (configureSolidBodyOnAwake)
+            {
+                ConfigureSolidBody();
+            }
 
             if (navigationAgent != null)
             {
                 navigationAgent.stoppingDistance = stopDistance;
                 navigationAgent.updateRotation = false;
+                navigationAgent.radius = colliderRadius;
+                navigationAgent.height = colliderHeight;
+                navigationAgent.avoidancePriority = avoidancePriority;
+                navigationAgent.obstacleAvoidanceType = obstacleAvoidance;
+            }
+        }
+
+        private void OnEnable()
+        {
+            if (playRespawnSequenceOnEnable)
+            {
+                BeginRespawnSequence();
             }
         }
 
@@ -85,6 +141,13 @@ namespace TinyHunter.MVP.Enemies
             {
                 SetMoving(false);
                 StopNavigation();
+                return;
+            }
+
+            if (isRespawning)
+            {
+                UpdateRespawnSequence();
+                UpdateMovingFromTransformDelta();
                 return;
             }
 
@@ -273,14 +336,27 @@ namespace TinyHunter.MVP.Enemies
             if (ShouldUseNavMeshMovement())
             {
                 navigationAgent.stoppingDistance = desiredStopDistance;
-                navigationAgent.SetDestination(targetPosition);
-                SetMoving(true);
+                if (HasNavigablePath(targetPosition))
+                {
+                    navigationAgent.SetDestination(targetPosition);
+                    SetMoving(true);
+                }
+                else
+                {
+                    StopNavigation();
+                    SetMoving(false);
+                }
+                return;
+            }
+
+            if (!allowDirectMovementFallback)
+            {
+                SetMoving(false);
                 return;
             }
 
             Vector3 moveDirection = offset / distance;
-            transform.position += moveDirection * (moveSpeed * Time.deltaTime);
-            SetMoving(true);
+            TryMoveDirect(moveDirection, targetPosition);
         }
 
         private void TryAttack()
@@ -323,12 +399,27 @@ namespace TinyHunter.MVP.Enemies
             EndAttack();
         }
 
+        public void AnimationEvent_EndRespawn()
+        {
+            EndRespawnSequence();
+        }
+
         private bool ShouldUseNavMeshMovement()
         {
             return useNavMeshIfAvailable
                    && navigationAgent != null
                    && navigationAgent.enabled
                    && navigationAgent.isOnNavMesh;
+        }
+
+        private bool HasNavigablePath(Vector3 targetPosition)
+        {
+            if (!ShouldUseNavMeshMovement()) return false;
+
+            NavMeshPath path = new();
+            if (!navigationAgent.CalculatePath(targetPosition, path)) return false;
+            if (path.corners == null || path.corners.Length == 0) return false;
+            return path.status == requiredPathStatus;
         }
 
         private void StopNavigation()
@@ -364,6 +455,176 @@ namespace TinyHunter.MVP.Enemies
         {
             if (patrolPoints == null || patrolPoints.Length == 0) return;
             patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
+        }
+
+        public void BeginRespawnSequence()
+        {
+            if (animationBridge != null && animationBridge.IsDying) return;
+
+            isRespawning = true;
+            respawnTimer = Mathf.Max(0.01f, respawnSequenceDuration);
+            respawnTargetPosition = transform.position;
+            respawnStartPosition = applyRespawnMovementOffset ? transform.position + transform.rotation * respawnMovementOffset : transform.position;
+
+            if (applyRespawnMovementOffset)
+            {
+                if (ShouldUseNavMeshMovement())
+                {
+                    navigationAgent.Warp(respawnStartPosition);
+                }
+                else
+                {
+                    transform.position = respawnStartPosition;
+                }
+            }
+
+            meleeHitbox?.EndAttackWindow();
+            StopNavigation();
+            SetMoving(false);
+            animationBridge?.BeginRespawn();
+        }
+
+        private void UpdateRespawnSequence()
+        {
+            StopNavigation();
+            SetMoving(false);
+
+            if (applyRespawnMovementOffset)
+            {
+                float progress = 1f - Mathf.Clamp01(respawnTimer / Mathf.Max(0.01f, respawnSequenceDuration));
+                float curveValue = respawnMovementCurve != null ? respawnMovementCurve.Evaluate(progress) : progress;
+                Vector3 position = Vector3.LerpUnclamped(respawnStartPosition, respawnTargetPosition, curveValue);
+                if (ShouldUseNavMeshMovement())
+                {
+                    navigationAgent.Warp(position);
+                }
+                else
+                {
+                    transform.position = position;
+                }
+            }
+
+            if (!useFallbackRespawnTimer) return;
+
+            respawnTimer -= Time.deltaTime;
+            if (respawnTimer <= 0f)
+            {
+                EndRespawnSequence();
+            }
+        }
+
+        private void EndRespawnSequence()
+        {
+            if (!isRespawning) return;
+
+            isRespawning = false;
+            animationBridge?.EndRespawn();
+            if (applyRespawnMovementOffset)
+            {
+                if (ShouldUseNavMeshMovement())
+                {
+                    navigationAgent.Warp(respawnTargetPosition);
+                }
+                else
+                {
+                    transform.position = respawnTargetPosition;
+                }
+            }
+        }
+
+        private void ConfigureSolidBody()
+        {
+            if (bodyCollider != null)
+            {
+                bodyCollider.isTrigger = false;
+                bodyCollider.center = colliderCenter;
+                bodyCollider.height = colliderHeight;
+                bodyCollider.radius = colliderRadius;
+            }
+
+            if (physicsBody == null) return;
+            physicsBody.isKinematic = true;
+            physicsBody.useGravity = false;
+            physicsBody.constraints = RigidbodyConstraints.FreezeRotation;
+        }
+
+        private void TryMoveDirect(Vector3 desiredDirection, Vector3 targetPosition)
+        {
+            Vector3 movement = ResolveDirectMoveDirection(desiredDirection, targetPosition);
+            if (movement.sqrMagnitude <= 0.0001f)
+            {
+                SetMoving(false);
+                return;
+            }
+
+            transform.position += movement * (moveSpeed * Time.deltaTime);
+            SetMoving(true);
+        }
+
+        private Vector3 ResolveDirectMoveDirection(Vector3 desiredDirection, Vector3 targetPosition)
+        {
+            if (!IsDirectionBlocked(desiredDirection)) return desiredDirection;
+
+            float bestScore = float.NegativeInfinity;
+            Vector3 bestDirection = Vector3.zero;
+
+            for (int i = 1; i <= directMoveAvoidanceChecksPerSide; i++)
+            {
+                float angle = directMoveAvoidanceAngle * i;
+                Vector3 left = Quaternion.Euler(0f, -angle, 0f) * desiredDirection;
+                EvaluateDirectMoveCandidate(left, targetPosition, ref bestDirection, ref bestScore);
+
+                Vector3 right = Quaternion.Euler(0f, angle, 0f) * desiredDirection;
+                EvaluateDirectMoveCandidate(right, targetPosition, ref bestDirection, ref bestScore);
+            }
+
+            return bestDirection;
+        }
+
+        private void EvaluateDirectMoveCandidate(Vector3 candidateDirection, Vector3 targetPosition, ref Vector3 bestDirection, ref float bestScore)
+        {
+            if (candidateDirection.sqrMagnitude <= 0.0001f || IsDirectionBlocked(candidateDirection)) return;
+
+            Vector3 nextPosition = transform.position + candidateDirection.normalized * moveSpeed * Time.deltaTime;
+            float score = Vector3.Dot(candidateDirection.normalized, (targetPosition - nextPosition).normalized);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestDirection = candidateDirection.normalized;
+            }
+        }
+
+        private bool IsDirectionBlocked(Vector3 direction)
+        {
+            Vector3 castDirection = direction.normalized;
+            if (castDirection.sqrMagnitude <= 0.0001f) return true;
+
+            float castDistance = moveSpeed * Time.deltaTime + directMoveCastPadding;
+            GetColliderCapsule(out Vector3 pointOne, out Vector3 pointTwo, out float radius);
+            RaycastHit[] hits = Physics.CapsuleCastAll(pointOne, pointTwo, radius, castDirection, castDistance, movementBlockers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Transform hitTransform = hits[i].transform;
+                if (hitTransform == null || hitTransform == transform || hitTransform.IsChildOf(transform)) continue;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void GetColliderCapsule(out Vector3 pointOne, out Vector3 pointTwo, out float radius)
+        {
+            Vector3 center = bodyCollider != null
+                ? transform.TransformPoint(bodyCollider.center)
+                : transform.position + Vector3.up * colliderCenter.y;
+
+            float height = bodyCollider != null ? bodyCollider.height : colliderHeight;
+            radius = bodyCollider != null ? bodyCollider.radius : colliderRadius;
+            float halfHeight = Mathf.Max(radius, height * 0.5f) - radius;
+            Vector3 up = transform.up * halfHeight;
+            Vector3 step = Vector3.up * directMoveStepHeight;
+            pointOne = center + up + step;
+            pointTwo = center - up + step;
         }
 
         private static Transform FindPlayerTarget()

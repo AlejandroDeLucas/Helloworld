@@ -9,6 +9,7 @@ namespace TinyHunter.MVP.Enemies
         private static readonly int IsAttackingHash = Animator.StringToHash("IsAttacking");
         private static readonly int IsGettingHitHash = Animator.StringToHash("IsGettingHit");
         private static readonly int IsDyingHash = Animator.StringToHash("IsDying");
+        private static readonly int IsRespawningHash = Animator.StringToHash("IsRespawning");
 
         [SerializeField] private Animator animator;
         [SerializeField] private bool useAnimatorRootMotion;
@@ -19,6 +20,7 @@ namespace TinyHunter.MVP.Enemies
 
         public bool IsAttacking { get; private set; }
         public bool IsDying { get; private set; }
+        public bool IsRespawning { get; private set; }
 
         private void Reset()
         {
@@ -33,13 +35,13 @@ namespace TinyHunter.MVP.Enemies
 
         public void SetMoving(bool isMoving)
         {
-            if (animator == null || IsDying || IsAttacking) return;
+            if (animator == null || IsDying || IsAttacking || IsRespawning) return;
             animator.SetBool(IsMovingHash, isMoving);
         }
 
         public void BeginAttack()
         {
-            if (animator == null || IsDying) return;
+            if (animator == null || IsDying || IsRespawning) return;
 
             IsAttacking = true;
             animator.SetBool(IsMovingHash, false);
@@ -77,11 +79,33 @@ namespace TinyHunter.MVP.Enemies
             if (animator == null) return;
 
             IsDying = true;
+            IsRespawning = false;
             IsAttacking = false;
             animator.SetBool(IsMovingHash, false);
             animator.SetBool(IsAttackingHash, false);
             animator.SetBool(IsGettingHitHash, false);
+            animator.SetBool(IsRespawningHash, false);
             animator.SetBool(IsDyingHash, true);
+        }
+
+        public void BeginRespawn()
+        {
+            if (animator == null || IsDying) return;
+
+            IsRespawning = true;
+            IsAttacking = false;
+            animator.SetBool(IsMovingHash, false);
+            animator.SetBool(IsAttackingHash, false);
+            animator.SetBool(IsGettingHitHash, false);
+            animator.SetBool(IsRespawningHash, true);
+        }
+
+        public void EndRespawn()
+        {
+            if (animator == null) return;
+
+            IsRespawning = false;
+            animator.SetBool(IsRespawningHash, false);
         }
 
         public bool IsCurrentAnimationFinished(float normalizedThreshold = 0.98f)

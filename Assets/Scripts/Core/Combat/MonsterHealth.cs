@@ -20,6 +20,7 @@ namespace TinyHunter.Core.Combat
         [SerializeField] private float destroyDelayAfterDeath = 1.5f;
 
         private MonsterPartBreakSystem partBreakSystem;
+        private ITemporaryInvulnerabilityProvider temporaryInvulnerabilityProvider;
         private float currentHealth;
         private bool isDefeated;
 
@@ -29,11 +30,13 @@ namespace TinyHunter.Core.Combat
             partBreakSystem = GetComponent<MonsterPartBreakSystem>();
             partBreakSystem.OnPartBroken += OnPartBroken;
             if (animationBridge == null) animationBridge = GetComponent<EnemyAnimationBridge>();
+            temporaryInvulnerabilityProvider = GetComponent<ITemporaryInvulnerabilityProvider>();
         }
 
         public void TakeHit(float damage, DamageType damageType, string hitPartId = null, Vector3? hitPoint = null)
         {
             if (isDefeated) return;
+            if (temporaryInvulnerabilityProvider != null && temporaryInvulnerabilityProvider.IsInvulnerable) return;
             if (damageType == definition.Weakness)
             {
                 damage *= 1.25f;
