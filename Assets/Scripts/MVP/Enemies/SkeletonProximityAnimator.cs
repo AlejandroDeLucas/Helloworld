@@ -28,7 +28,7 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private float moveSpeed = 1.5f;
         [SerializeField] private float stopDistance = 1.2f;
         [SerializeField] private bool useNavMeshIfAvailable = true;
-        [SerializeField] private bool allowDirectMovementFallback;
+        [SerializeField] private bool allowDirectMovementFallback = true;
 
         [Header("Solid Body / Path Blocking")]
         [SerializeField] private bool configureSolidBodyOnAwake = true;
@@ -340,16 +340,20 @@ namespace TinyHunter.MVP.Enemies
                 {
                     navigationAgent.SetDestination(targetPosition);
                     SetMoving(true);
+                    return;
                 }
                 else
                 {
                     StopNavigation();
-                    SetMoving(false);
+                    if (!allowDirectMovementFallback)
+                    {
+                        SetMoving(false);
+                        return;
+                    }
                 }
-                return;
             }
 
-            if (!allowDirectMovementFallback)
+            if (!allowDirectMovementFallback && ShouldUseNavMeshMovement())
             {
                 SetMoving(false);
                 return;
