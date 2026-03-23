@@ -1,3 +1,4 @@
+using TinyHunter.Core.Combat;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -5,82 +6,55 @@ namespace TinyHunter.MVP.Enemies
 {
     [RequireComponent(typeof(CapsuleCollider))]
     [RequireComponent(typeof(NavMeshAgent))]
-    public class SkeletonProximityAnimator : MonoBehaviour, TinyHunter.Core.Combat.ITemporaryInvulnerabilityProvider
+    public class SkeletonProximityAnimator : MonoBehaviour, ITemporaryInvulnerabilityProvider
     {
         private static readonly int IsPlayerNearHash = Animator.StringToHash("IsPlayerNear");
 
-        [Header("Required References")]
+        [Header("References")]
         [SerializeField] private Animator skeletonAnimator;
         [SerializeField] private Transform playerTarget;
         [SerializeField] private EnemyAnimationBridge animationBridge;
         [SerializeField] private EnemyMeleeDamageHitbox meleeHitbox;
         [SerializeField] private NavMeshAgent navigationAgent;
         [SerializeField] private CapsuleCollider bodyCollider;
-        [SerializeField] private Rigidbody physicsBody;
 
-        [Header("Current MVP Detection")]
+        [Header("Detection")]
         [SerializeField] private float proximityRange = 4f;
-        [SerializeField] private bool rotateTowardPlayerInRange = true;
+        [SerializeField] private float attackRange = 1.6f;
+        [SerializeField] private float attackCooldown = 1.25f;
+        [SerializeField] private float attackFallbackDuration = 0.9f;
+
+        [Header("Movement")]
+        [SerializeField] private float moveSpeed = 1.5f;
+        [SerializeField] private float stopDistance = 1.2f;
+        [SerializeField] private bool useNavMesh = true;
+        [SerializeField] private LayerMask directMoveBlockers = Physics.DefaultRaycastLayers;
+        [SerializeField] private float directMoveCastPadding = 0.05f;
+        [SerializeField] private bool rotateTowardTarget = true;
         [SerializeField] private float turnSpeed = 360f;
         [SerializeField] private bool modelForwardIsReversed = true;
         [SerializeField] private float additionalFacingYawOffset;
-        [SerializeField] private bool moveTowardPlayerInRange = true;
-        [SerializeField] private float moveSpeed = 1.5f;
-        [SerializeField] private float stopDistance = 1.2f;
-        [SerializeField] private bool useNavMeshIfAvailable = true;
-        [SerializeField] private bool allowDirectMovementFallback = true;
 
-        [Header("Solid Body / Path Blocking")]
-        [SerializeField] private bool configureSolidBodyOnAwake = true;
-        [SerializeField] private Vector3 colliderCenter = new(0f, 0.9f, 0f);
-        [SerializeField] private float colliderHeight = 1.8f;
-        [SerializeField] private float colliderRadius = 0.35f;
-        [SerializeField] private LayerMask movementBlockers = Physics.DefaultRaycastLayers;
-        [SerializeField] private float directMoveCastPadding = 0.05f;
-        [SerializeField] private float directMoveStepHeight = 0.2f;
-        [SerializeField] private float directMoveAvoidanceAngle = 35f;
-        [SerializeField] private int directMoveAvoidanceChecksPerSide = 3;
-        [SerializeField] private NavMeshPathStatus requiredPathStatus = NavMeshPathStatus.PathComplete;
-        [SerializeField, Range(0, 99)] private int avoidancePriority = 50;
-        [SerializeField] private ObstacleAvoidanceType obstacleAvoidance = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
-
-        [Header("Respawn / Spawn Intro")]
-        [SerializeField] private bool playRespawnSequenceOnEnable = true;
-        [SerializeField] private float respawnSequenceDuration = 1.1f;
-        [SerializeField] private bool invulnerableDuringRespawn = true;
-        [SerializeField] private bool useFallbackRespawnTimer = true;
-        [SerializeField] private bool applyRespawnMovementOffset;
-        [SerializeField] private Vector3 respawnMovementOffset = new(0f, 0f, -0.35f);
-        [SerializeField] private AnimationCurve respawnMovementCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
-
-        [Header("Combat")]
-        [SerializeField] private bool canAttack = true;
-        [SerializeField] private float attackRange = 1.6f;
-        [SerializeField] private float attackCooldown = 1.25f;
-        [SerializeField] private bool useFallbackAttackTimer;
-        [SerializeField] private float fallbackAttackDuration = 0.9f;
-
-        [Header("Optional Patrol")]
+        [Header("Patrol")]
         [SerializeField] private bool usePatrol;
         [SerializeField] private Transform[] patrolPoints;
         [SerializeField] private float patrolWaitTime = 1.5f;
 
-        [Header("Future Detection - Disabled By Default")]
-        [SerializeField] private bool useVision;
-        [SerializeField] private float visionRange = 8f;
-        [SerializeField, Range(1f, 180f)] private float visionAngle = 75f;
-        [SerializeField] private LayerMask visionBlockers = Physics.DefaultRaycastLayers;
+        [Header("Respawn")]
+        [SerializeField] private bool playRespawnSequenceOnEnable = true;
+        [SerializeField] private float respawnDuration = 1.1f;
+        [SerializeField] private bool invulnerableDuringRespawn = true;
+        [SerializeField] private Vector3 respawnOffset = new(0f, 0f, -0.35f);
 
-        [SerializeField] private bool useHearing;
-        [SerializeField] private float hearingRange = 6f;
-        [SerializeField] private float hearingMemoryDuration = 1.5f;
+        [Header("Body")]
+        [SerializeField] private Vector3 colliderCenter = new(0f, 0.9f, 0f);
+        [SerializeField] private float colliderHeight = 1.8f;
+        [SerializeField] private float colliderRadius = 0.35f;
 
-        private float lastHeardTime = float.NegativeInfinity;
         private float attackCooldownTimer;
         private float attackTimer;
         private float patrolWaitTimer;
         private int patrolIndex;
-        private Vector3 lastPosition;
         private bool isRespawning;
         private float respawnTimer;
         private Vector3 respawnStartPosition;
@@ -90,40 +64,14 @@ namespace TinyHunter.MVP.Enemies
 
         private void Reset()
         {
-            if (skeletonAnimator == null) skeletonAnimator = GetComponentInChildren<Animator>();
-            if (animationBridge == null) animationBridge = GetComponent<EnemyAnimationBridge>();
-            if (meleeHitbox == null) meleeHitbox = GetComponentInChildren<EnemyMeleeDamageHitbox>();
-            if (navigationAgent == null) navigationAgent = GetComponent<NavMeshAgent>();
-            if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider>();
-            if (physicsBody == null) physicsBody = GetComponent<Rigidbody>();
-            ConfigureSolidBody();
+            CacheReferences();
+            SyncBodyAndAgent();
         }
 
         private void Awake()
         {
-            if (skeletonAnimator == null) skeletonAnimator = GetComponentInChildren<Animator>();
-            if (playerTarget == null) playerTarget = FindPlayerTarget();
-            if (animationBridge == null) animationBridge = GetComponent<EnemyAnimationBridge>();
-            if (meleeHitbox == null) meleeHitbox = GetComponentInChildren<EnemyMeleeDamageHitbox>();
-            if (navigationAgent == null) navigationAgent = GetComponent<NavMeshAgent>();
-            if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider>();
-            if (physicsBody == null) physicsBody = GetComponent<Rigidbody>();
-            lastPosition = transform.position;
-
-            if (configureSolidBodyOnAwake)
-            {
-                ConfigureSolidBody();
-            }
-
-            if (navigationAgent != null)
-            {
-                navigationAgent.stoppingDistance = stopDistance;
-                navigationAgent.updateRotation = false;
-                navigationAgent.radius = colliderRadius;
-                navigationAgent.height = colliderHeight;
-                navigationAgent.avoidancePriority = avoidancePriority;
-                navigationAgent.obstacleAvoidanceType = obstacleAvoidance;
-            }
+            CacheReferences();
+            SyncBodyAndAgent();
         }
 
         private void OnEnable()
@@ -137,255 +85,70 @@ namespace TinyHunter.MVP.Enemies
         private void Update()
         {
             if (skeletonAnimator == null) return;
+
             if (animationBridge != null && animationBridge.IsDying)
             {
-                SetMoving(false);
-                StopNavigation();
+                StopMoving();
                 return;
             }
 
             if (isRespawning)
             {
                 UpdateRespawnSequence();
-                UpdateMovingFromTransformDelta();
                 return;
             }
 
-            if (playerTarget == null) playerTarget = FindPlayerTarget();
             if (playerTarget == null)
             {
-                skeletonAnimator.SetBool(IsPlayerNearHash, false);
-                SetMoving(false);
-                return;
+                playerTarget = FindPlayerTarget();
             }
 
             attackCooldownTimer -= Time.deltaTime;
-            bool isPlayerNear = IsPlayerInsideProximityRange();
 
-            if (!isPlayerNear && useVision)
+            if (playerTarget == null)
             {
-                isPlayerNear = CanSeePlayer();
+                skeletonAnimator.SetBool(IsPlayerNearHash, false);
+                UpdatePatrol();
+                return;
             }
 
-            if (!isPlayerNear && useHearing)
-            {
-                isPlayerNear = HasRecentHearingContact();
-            }
-
+            float distanceToPlayer = HorizontalDistanceTo(playerTarget.position);
+            bool isPlayerNear = distanceToPlayer <= proximityRange;
             skeletonAnimator.SetBool(IsPlayerNearHash, isPlayerNear);
 
             if (animationBridge != null && animationBridge.IsAttacking)
             {
                 UpdateAttackState();
-                SetMoving(false);
                 return;
             }
 
             if (isPlayerNear)
             {
-                UpdatePlayerEngagement();
+                EngagePlayer(distanceToPlayer);
             }
             else
             {
                 UpdatePatrol();
             }
-
-            UpdateMovingFromTransformDelta();
         }
 
-        public void RegisterNoise(Vector3 noisePosition, float noiseRadius)
+        public void BeginRespawnSequence()
         {
-            if (!useHearing || playerTarget == null) return;
+            if (animationBridge != null && animationBridge.IsDying) return;
 
-            float effectiveRadius = Mathf.Max(hearingRange, noiseRadius);
-            if (Vector3.Distance(transform.position, noisePosition) <= effectiveRadius)
-            {
-                lastHeardTime = Time.time;
-            }
-        }
-
-        private bool IsPlayerInsideProximityRange()
-        {
-            return Vector3.Distance(transform.position, playerTarget.position) <= proximityRange;
-        }
-
-        private bool CanSeePlayer()
-        {
-            Vector3 toPlayer = playerTarget.position - transform.position;
-            if (toPlayer.sqrMagnitude > visionRange * visionRange) return false;
-
-            Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
-            Vector3 flatToPlayer = Vector3.ProjectOnPlane(toPlayer, Vector3.up).normalized;
-            float angleToPlayer = Vector3.Angle(flatForward, flatToPlayer);
-            if (angleToPlayer > visionAngle * 0.5f) return false;
-
-            Vector3 origin = transform.position + Vector3.up * 1.6f;
-            Vector3 target = playerTarget.position + Vector3.up * 1.2f;
-            Vector3 direction = target - origin;
-            float distance = direction.magnitude;
-            if (distance <= 0.01f) return true;
-
-            if (Physics.Raycast(origin, direction.normalized, out var hit, distance, visionBlockers, QueryTriggerInteraction.Ignore))
-            {
-                return hit.transform == playerTarget || hit.transform.IsChildOf(playerTarget);
-            }
-
-            return true;
-        }
-
-        private bool HasRecentHearingContact()
-        {
-            return Time.time - lastHeardTime <= hearingMemoryDuration;
-        }
-
-        private void UpdatePlayerEngagement()
-        {
-            float distanceToPlayer = HorizontalDistanceTo(playerTarget.position);
-
-            if (rotateTowardPlayerInRange)
-            {
-                RotateTowardPlayer();
-            }
-
-            if (canAttack && distanceToPlayer <= attackRange)
-            {
-                StopNavigation();
-                SetMoving(false);
-                TryAttack();
-                return;
-            }
-
-            if (moveTowardPlayerInRange)
-            {
-                MoveTowardPlayer();
-                return;
-            }
-
-            StopNavigation();
-            SetMoving(false);
-        }
-
-        private void UpdatePatrol()
-        {
-            if (!usePatrol || patrolPoints == null || patrolPoints.Length == 0)
-            {
-                StopNavigation();
-                SetMoving(false);
-                return;
-            }
-
-            Transform patrolPoint = patrolPoints[patrolIndex];
-            if (patrolPoint == null)
-            {
-                AdvancePatrolPoint();
-                SetMoving(false);
-                return;
-            }
-
-            float distanceToPatrol = HorizontalDistanceTo(patrolPoint.position);
-            if (distanceToPatrol <= stopDistance)
-            {
-                StopNavigation();
-                SetMoving(false);
-                patrolWaitTimer += Time.deltaTime;
-                if (patrolWaitTimer >= patrolWaitTime)
-                {
-                    patrolWaitTimer = 0f;
-                    AdvancePatrolPoint();
-                }
-
-                return;
-            }
-
-            patrolWaitTimer = 0f;
-            MoveTowardsPosition(patrolPoint.position, false);
-        }
-
-        private void RotateTowardPlayer()
-        {
-            Vector3 direction = playerTarget.position - transform.position;
-            direction.y = 0f;
-
-            if (direction.sqrMagnitude <= 0.0001f) return;
-
-            Quaternion targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-            float yawOffset = additionalFacingYawOffset + (modelForwardIsReversed ? 180f : 0f);
-            targetRotation *= Quaternion.Euler(0f, yawOffset, 0f);
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
-        }
-
-        private void MoveTowardPlayer()
-        {
-            MoveTowardsPosition(playerTarget.position, true);
-        }
-
-        private void MoveTowardsPosition(Vector3 targetPosition, bool stopAtAttackDistance)
-        {
-            float desiredStopDistance = stopAtAttackDistance && canAttack ? Mathf.Max(stopDistance, attackRange) : stopDistance;
-            Vector3 offset = targetPosition - transform.position;
-            offset.y = 0f;
-
-            float distance = offset.magnitude;
-            if (distance <= desiredStopDistance || distance <= 0.0001f)
-            {
-                StopNavigation();
-                SetMoving(false);
-                return;
-            }
-
-            if (ShouldUseNavMeshMovement())
-            {
-                navigationAgent.stoppingDistance = desiredStopDistance;
-                if (HasNavigablePath(targetPosition))
-                {
-                    navigationAgent.SetDestination(targetPosition);
-                    SetMoving(true);
-                    return;
-                }
-                else
-                {
-                    StopNavigation();
-                    if (!allowDirectMovementFallback)
-                    {
-                        SetMoving(false);
-                        return;
-                    }
-                }
-            }
-
-            if (!allowDirectMovementFallback && ShouldUseNavMeshMovement())
-            {
-                SetMoving(false);
-                return;
-            }
-
-            Vector3 moveDirection = offset / distance;
-            TryMoveDirect(moveDirection, targetPosition);
-        }
-
-        private void TryAttack()
-        {
-            if (!canAttack || attackCooldownTimer > 0f) return;
-
-            attackCooldownTimer = attackCooldown;
-            attackTimer = fallbackAttackDuration;
-            animationBridge?.BeginAttack();
-        }
-
-        private void UpdateAttackState()
-        {
-            attackTimer -= Time.deltaTime;
-            bool animationFinished = animationBridge != null && animationBridge.IsCurrentAnimationFinished();
-            if (animationFinished || (useFallbackAttackTimer && attackTimer <= 0f))
-            {
-                EndAttack();
-            }
-        }
-
-        private void EndAttack()
-        {
+            isRespawning = true;
+            respawnTimer = Mathf.Max(0.01f, respawnDuration);
+            respawnTargetPosition = transform.position;
+            respawnStartPosition = transform.position + transform.rotation * respawnOffset;
+            WarpTo(respawnStartPosition);
+            StopMoving();
             meleeHitbox?.EndAttackWindow();
-            animationBridge?.EndAttack();
+            animationBridge?.BeginRespawn();
+        }
+
+        public void AnimationEvent_EndRespawn()
+        {
+            EndRespawnSequence();
         }
 
         public void AnimationEvent_BeginAttackWindow()
@@ -403,114 +166,134 @@ namespace TinyHunter.MVP.Enemies
             EndAttack();
         }
 
-        public void AnimationEvent_EndRespawn()
+        private void EngagePlayer(float distanceToPlayer)
         {
-            EndRespawnSequence();
-        }
-
-        private bool ShouldUseNavMeshMovement()
-        {
-            return useNavMeshIfAvailable
-                   && navigationAgent != null
-                   && navigationAgent.enabled
-                   && navigationAgent.isOnNavMesh;
-        }
-
-        private bool HasNavigablePath(Vector3 targetPosition)
-        {
-            if (!ShouldUseNavMeshMovement()) return false;
-
-            NavMeshPath path = new();
-            if (!navigationAgent.CalculatePath(targetPosition, path)) return false;
-            if (path.corners == null || path.corners.Length == 0) return false;
-            return path.status == requiredPathStatus;
-        }
-
-        private void StopNavigation()
-        {
-            if (!ShouldUseNavMeshMovement()) return;
-            navigationAgent.ResetPath();
-        }
-
-        private void SetMoving(bool isMoving)
-        {
-            animationBridge?.SetMoving(isMoving);
-        }
-
-        private void UpdateMovingFromTransformDelta()
-        {
-            float movement = (transform.position - lastPosition).magnitude;
-            if (animationBridge != null && !animationBridge.IsAttacking && !animationBridge.IsDying)
+            if (rotateTowardTarget)
             {
-                animationBridge.SetMoving(movement > 0.001f);
+                RotateToward(playerTarget.position);
             }
 
-            lastPosition = transform.position;
+            if (distanceToPlayer <= attackRange)
+            {
+                StopMoving();
+                TryAttack();
+                return;
+            }
+
+            MoveTo(playerTarget.position, Mathf.Max(stopDistance, attackRange));
         }
 
-        private float HorizontalDistanceTo(Vector3 position)
+        private void UpdatePatrol()
         {
-            Vector3 offset = position - transform.position;
+            if (!usePatrol || patrolPoints == null || patrolPoints.Length == 0)
+            {
+                StopMoving();
+                return;
+            }
+
+            Transform patrolPoint = patrolPoints[patrolIndex];
+            if (patrolPoint == null)
+            {
+                AdvancePatrolPoint();
+                StopMoving();
+                return;
+            }
+
+            float distanceToPatrol = HorizontalDistanceTo(patrolPoint.position);
+            if (distanceToPatrol <= stopDistance)
+            {
+                StopMoving();
+                patrolWaitTimer += Time.deltaTime;
+                if (patrolWaitTimer >= patrolWaitTime)
+                {
+                    patrolWaitTimer = 0f;
+                    AdvancePatrolPoint();
+                }
+
+                return;
+            }
+
+            patrolWaitTimer = 0f;
+            MoveTo(patrolPoint.position, stopDistance);
+        }
+
+        private void MoveTo(Vector3 targetPosition, float desiredStopDistance)
+        {
+            Vector3 offset = targetPosition - transform.position;
             offset.y = 0f;
-            return offset.magnitude;
-        }
 
-        private void AdvancePatrolPoint()
-        {
-            if (patrolPoints == null || patrolPoints.Length == 0) return;
-            patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
-        }
-
-        public void BeginRespawnSequence()
-        {
-            if (animationBridge != null && animationBridge.IsDying) return;
-
-            isRespawning = true;
-            respawnTimer = Mathf.Max(0.01f, respawnSequenceDuration);
-            respawnTargetPosition = transform.position;
-            respawnStartPosition = applyRespawnMovementOffset ? transform.position + transform.rotation * respawnMovementOffset : transform.position;
-
-            if (applyRespawnMovementOffset)
+            float distance = offset.magnitude;
+            if (distance <= desiredStopDistance || distance <= 0.001f)
             {
-                if (ShouldUseNavMeshMovement())
-                {
-                    navigationAgent.Warp(respawnStartPosition);
-                }
-                else
-                {
-                    transform.position = respawnStartPosition;
-                }
+                StopMoving();
+                return;
             }
 
+            if (useNavMesh && CanUseNavMesh())
+            {
+                navigationAgent.speed = moveSpeed;
+                navigationAgent.stoppingDistance = desiredStopDistance;
+                navigationAgent.SetDestination(targetPosition);
+                animationBridge?.SetMoving(true);
+                return;
+            }
+
+            Vector3 direction = offset / distance;
+            if (IsDirectPathBlocked(direction))
+            {
+                StopMoving();
+                return;
+            }
+
+            transform.position += direction * (moveSpeed * Time.deltaTime);
+            animationBridge?.SetMoving(true);
+        }
+
+        private void StopMoving()
+        {
+            if (CanUseNavMesh())
+            {
+                navigationAgent.ResetPath();
+                navigationAgent.velocity = Vector3.zero;
+            }
+
+            animationBridge?.SetMoving(false);
+        }
+
+        private void TryAttack()
+        {
+            if (attackCooldownTimer > 0f || animationBridge == null) return;
+
+            attackCooldownTimer = attackCooldown;
+            attackTimer = attackFallbackDuration;
+            animationBridge.BeginAttack();
+        }
+
+        private void UpdateAttackState()
+        {
+            attackTimer -= Time.deltaTime;
+            bool animationFinished = animationBridge != null && animationBridge.IsCurrentAnimationFinished();
+            if (animationFinished || attackTimer <= 0f)
+            {
+                EndAttack();
+            }
+        }
+
+        private void EndAttack()
+        {
             meleeHitbox?.EndAttackWindow();
-            StopNavigation();
-            SetMoving(false);
-            animationBridge?.BeginRespawn();
+            animationBridge?.EndAttack();
         }
 
         private void UpdateRespawnSequence()
         {
-            StopNavigation();
-            SetMoving(false);
-
-            if (applyRespawnMovementOffset)
-            {
-                float progress = 1f - Mathf.Clamp01(respawnTimer / Mathf.Max(0.01f, respawnSequenceDuration));
-                float curveValue = respawnMovementCurve != null ? respawnMovementCurve.Evaluate(progress) : progress;
-                Vector3 position = Vector3.LerpUnclamped(respawnStartPosition, respawnTargetPosition, curveValue);
-                if (ShouldUseNavMeshMovement())
-                {
-                    navigationAgent.Warp(position);
-                }
-                else
-                {
-                    transform.position = position;
-                }
-            }
-
-            if (!useFallbackRespawnTimer) return;
-
+            StopMoving();
             respawnTimer -= Time.deltaTime;
+
+            float progress = 1f - Mathf.Clamp01(respawnTimer / Mathf.Max(0.01f, respawnDuration));
+            Vector3 position = Vector3.Lerp(respawnStartPosition, respawnTargetPosition, progress);
+            WarpTo(position);
+
             if (respawnTimer <= 0f)
             {
                 EndRespawnSequence();
@@ -522,21 +305,74 @@ namespace TinyHunter.MVP.Enemies
             if (!isRespawning) return;
 
             isRespawning = false;
+            WarpTo(respawnTargetPosition);
             animationBridge?.EndRespawn();
-            if (applyRespawnMovementOffset)
-            {
-                if (ShouldUseNavMeshMovement())
-                {
-                    navigationAgent.Warp(respawnTargetPosition);
-                }
-                else
-                {
-                    transform.position = respawnTargetPosition;
-                }
-            }
         }
 
-        private void ConfigureSolidBody()
+        private void RotateToward(Vector3 targetPosition)
+        {
+            Vector3 direction = targetPosition - transform.position;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.0001f) return;
+
+            float yawOffset = additionalFacingYawOffset + (modelForwardIsReversed ? 180f : 0f);
+            Quaternion targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up) * Quaternion.Euler(0f, yawOffset, 0f);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
+        }
+
+        private bool IsDirectPathBlocked(Vector3 direction)
+        {
+            Vector3 center = transform.TransformPoint(bodyCollider != null ? bodyCollider.center : colliderCenter);
+            float radius = bodyCollider != null ? bodyCollider.radius : colliderRadius;
+            float height = bodyCollider != null ? bodyCollider.height : colliderHeight;
+            float halfHeight = Mathf.Max(radius, height * 0.5f) - radius;
+            Vector3 top = center + Vector3.up * halfHeight;
+            Vector3 bottom = center - Vector3.up * halfHeight;
+            float castDistance = moveSpeed * Time.deltaTime + directMoveCastPadding;
+
+            return Physics.CapsuleCast(top, bottom, radius, direction.normalized, out _, castDistance, directMoveBlockers, QueryTriggerInteraction.Ignore);
+        }
+
+        private float HorizontalDistanceTo(Vector3 targetPosition)
+        {
+            Vector3 offset = targetPosition - transform.position;
+            offset.y = 0f;
+            return offset.magnitude;
+        }
+
+        private bool CanUseNavMesh()
+        {
+            return navigationAgent != null && navigationAgent.enabled && navigationAgent.isOnNavMesh;
+        }
+
+        private void WarpTo(Vector3 position)
+        {
+            if (CanUseNavMesh())
+            {
+                navigationAgent.Warp(position);
+                return;
+            }
+
+            transform.position = position;
+        }
+
+        private void AdvancePatrolPoint()
+        {
+            if (patrolPoints == null || patrolPoints.Length == 0) return;
+            patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
+        }
+
+        private void CacheReferences()
+        {
+            if (skeletonAnimator == null) skeletonAnimator = GetComponentInChildren<Animator>();
+            if (playerTarget == null) playerTarget = FindPlayerTarget();
+            if (animationBridge == null) animationBridge = GetComponent<EnemyAnimationBridge>();
+            if (meleeHitbox == null) meleeHitbox = GetComponentInChildren<EnemyMeleeDamageHitbox>();
+            if (navigationAgent == null) navigationAgent = GetComponent<NavMeshAgent>();
+            if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider>();
+        }
+
+        private void SyncBodyAndAgent()
         {
             if (bodyCollider != null)
             {
@@ -546,89 +382,14 @@ namespace TinyHunter.MVP.Enemies
                 bodyCollider.radius = colliderRadius;
             }
 
-            if (physicsBody == null) return;
-            physicsBody.isKinematic = true;
-            physicsBody.useGravity = false;
-            physicsBody.constraints = RigidbodyConstraints.FreezeRotation;
-        }
-
-        private void TryMoveDirect(Vector3 desiredDirection, Vector3 targetPosition)
-        {
-            Vector3 movement = ResolveDirectMoveDirection(desiredDirection, targetPosition);
-            if (movement.sqrMagnitude <= 0.0001f)
+            if (navigationAgent != null)
             {
-                SetMoving(false);
-                return;
+                navigationAgent.updateRotation = false;
+                navigationAgent.speed = moveSpeed;
+                navigationAgent.radius = colliderRadius;
+                navigationAgent.height = colliderHeight;
+                navigationAgent.stoppingDistance = stopDistance;
             }
-
-            transform.position += movement * (moveSpeed * Time.deltaTime);
-            SetMoving(true);
-        }
-
-        private Vector3 ResolveDirectMoveDirection(Vector3 desiredDirection, Vector3 targetPosition)
-        {
-            if (!IsDirectionBlocked(desiredDirection)) return desiredDirection;
-
-            float bestScore = float.NegativeInfinity;
-            Vector3 bestDirection = Vector3.zero;
-
-            for (int i = 1; i <= directMoveAvoidanceChecksPerSide; i++)
-            {
-                float angle = directMoveAvoidanceAngle * i;
-                Vector3 left = Quaternion.Euler(0f, -angle, 0f) * desiredDirection;
-                EvaluateDirectMoveCandidate(left, targetPosition, ref bestDirection, ref bestScore);
-
-                Vector3 right = Quaternion.Euler(0f, angle, 0f) * desiredDirection;
-                EvaluateDirectMoveCandidate(right, targetPosition, ref bestDirection, ref bestScore);
-            }
-
-            return bestDirection;
-        }
-
-        private void EvaluateDirectMoveCandidate(Vector3 candidateDirection, Vector3 targetPosition, ref Vector3 bestDirection, ref float bestScore)
-        {
-            if (candidateDirection.sqrMagnitude <= 0.0001f || IsDirectionBlocked(candidateDirection)) return;
-
-            Vector3 nextPosition = transform.position + candidateDirection.normalized * moveSpeed * Time.deltaTime;
-            float score = Vector3.Dot(candidateDirection.normalized, (targetPosition - nextPosition).normalized);
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestDirection = candidateDirection.normalized;
-            }
-        }
-
-        private bool IsDirectionBlocked(Vector3 direction)
-        {
-            Vector3 castDirection = direction.normalized;
-            if (castDirection.sqrMagnitude <= 0.0001f) return true;
-
-            float castDistance = moveSpeed * Time.deltaTime + directMoveCastPadding;
-            GetColliderCapsule(out Vector3 pointOne, out Vector3 pointTwo, out float radius);
-            RaycastHit[] hits = Physics.CapsuleCastAll(pointOne, pointTwo, radius, castDirection, castDistance, movementBlockers, QueryTriggerInteraction.Ignore);
-            for (int i = 0; i < hits.Length; i++)
-            {
-                Transform hitTransform = hits[i].transform;
-                if (hitTransform == null || hitTransform == transform || hitTransform.IsChildOf(transform)) continue;
-                return true;
-            }
-
-            return false;
-        }
-
-        private void GetColliderCapsule(out Vector3 pointOne, out Vector3 pointTwo, out float radius)
-        {
-            Vector3 center = bodyCollider != null
-                ? transform.TransformPoint(bodyCollider.center)
-                : transform.position + Vector3.up * colliderCenter.y;
-
-            float height = bodyCollider != null ? bodyCollider.height : colliderHeight;
-            radius = bodyCollider != null ? bodyCollider.radius : colliderRadius;
-            float halfHeight = Mathf.Max(radius, height * 0.5f) - radius;
-            Vector3 up = transform.up * halfHeight;
-            Vector3 step = Vector3.up * directMoveStepHeight;
-            pointOne = center + up + step;
-            pointTwo = center - up + step;
         }
 
         private static Transform FindPlayerTarget()
@@ -642,49 +403,25 @@ namespace TinyHunter.MVP.Enemies
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(transform.position, proximityRange);
 
-            if (canAttack)
-            {
-                Gizmos.color = new Color(1f, 0.5f, 0f);
-                Gizmos.DrawWireSphere(transform.position, attackRange);
-            }
+            Gizmos.color = new Color(1f, 0.5f, 0f);
+            Gizmos.DrawWireSphere(transform.position, attackRange);
 
-            if (moveTowardPlayerInRange)
-            {
-                Gizmos.color = Color.red;
-                Gizmos.DrawWireSphere(transform.position, stopDistance);
-            }
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(transform.position, stopDistance);
 
-            if (useVision)
-            {
-                Vector3 origin = transform.position;
-                Vector3 leftBoundary = Quaternion.Euler(0f, -visionAngle * 0.5f, 0f) * transform.forward * visionRange;
-                Vector3 rightBoundary = Quaternion.Euler(0f, visionAngle * 0.5f, 0f) * transform.forward * visionRange;
+            if (!usePatrol || patrolPoints == null) return;
 
-                Gizmos.color = Color.cyan;
-                Gizmos.DrawWireSphere(origin, visionRange);
-                Gizmos.DrawLine(origin, origin + leftBoundary);
-                Gizmos.DrawLine(origin, origin + rightBoundary);
-            }
-
-            if (useHearing)
+            Gizmos.color = Color.green;
+            for (int i = 0; i < patrolPoints.Length; i++)
             {
-                Gizmos.color = Color.magenta;
-                Gizmos.DrawWireSphere(transform.position, hearingRange);
-            }
+                Transform point = patrolPoints[i];
+                if (point == null) continue;
 
-            if (usePatrol && patrolPoints != null)
-            {
-                Gizmos.color = Color.green;
-                for (int i = 0; i < patrolPoints.Length; i++)
+                Gizmos.DrawWireSphere(point.position, 0.2f);
+                Transform nextPoint = patrolPoints[(i + 1) % patrolPoints.Length];
+                if (nextPoint != null)
                 {
-                    Transform patrolPoint = patrolPoints[i];
-                    if (patrolPoint == null) continue;
-
-                    Gizmos.DrawWireSphere(patrolPoint.position, 0.2f);
-                    if (i + 1 < patrolPoints.Length && patrolPoints[i + 1] != null)
-                    {
-                        Gizmos.DrawLine(patrolPoint.position, patrolPoints[i + 1].position);
-                    }
+                    Gizmos.DrawLine(point.position, nextPoint.position);
                 }
             }
         }
