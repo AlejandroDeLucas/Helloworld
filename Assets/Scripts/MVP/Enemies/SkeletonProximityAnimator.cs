@@ -35,6 +35,13 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private bool modelForwardIsReversed = true;
         [SerializeField] private float additionalFacingYawOffset;
 
+        [Header("Attack Routing")]
+        [SerializeField] private bool requireClearAttackPath = true;
+        [SerializeField] private LayerMask attackBlockers = Physics.DefaultRaycastLayers;
+        [SerializeField] private float attackPathHeight = 1f;
+        [SerializeField] private float surroundOffset = 0.8f;
+        [SerializeField] private float surroundRadiusPadding = 0.15f;
+
         [Header("Patrol")]
         [SerializeField] private bool usePatrol;
         [SerializeField] private Transform[] patrolPoints;
@@ -173,14 +180,14 @@ namespace TinyHunter.MVP.Enemies
                 RotateToward(playerTarget.position);
             }
 
-            if (distanceToPlayer <= attackRange)
+            if (distanceToPlayer <= attackRange && HasClearAttackPath())
             {
                 StopMoving();
                 TryAttack();
                 return;
             }
 
-            MoveTo(playerTarget.position, Mathf.Max(stopDistance, attackRange));
+            MoveTo(GetApproachPosition(), Mathf.Max(stopDistance, attackRange));
         }
 
         private void UpdatePatrol()
@@ -215,6 +222,53 @@ namespace TinyHunter.MVP.Enemies
 
             patrolWaitTimer = 0f;
             MoveTo(patrolPoint.position, stopDistance);
+        }
+
+
+        private bool HasClearAttackPath()
+        {
+            if (!requireClearAttackPath || playerTarget == null) return true;
+
+            Vector3 origin = transform.position + Vector3.up * attackPathHeight;
+            Vector3 target = playerTarget.position + Vector3.up * attackPathHeight;
+            Vector3 direction = target - origin;
+            float distance = direction.magnitude;
+            if (distance <= 0.01f) return true;
+
+            if (!Physics.Raycast(origin, direction.normalized, out RaycastHit hit, distance, attackBlockers, QueryTriggerInteraction.Ignore))
+            {
+                return true;
+            }
+
+            Transform hitTransform = hit.transform;
+            return hitTransform == playerTarget || hitTransform.IsChildOf(playerTarget);
+        }
+
+        private Vector3 GetApproachPosition()
+        {
+            if (playerTarget == null) return transform.position;
+
+            float desiredRadius = Mathf.Max(stopDistance, attackRange + surroundRadiusPadding);
+            Vector3 radial = transform.position - playerTarget.position;
+            radial.y = 0f;
+            if (radial.sqrMagnitude <= 0.001f)
+            {
+                radial = -playerTarget.forward;
+                radial.y = 0f;
+            }
+
+            radial = radial.normalized;
+            Vector3 tangent = Vector3.Cross(Vector3.up, radial).normalized;
+            float sideSign = (Mathf.Abs(GetInstanceID()) & 1) == 0 ? 1f : -1f;
+            Vector3 candidate = playerTarget.position + radial * desiredRadius + tangent * (surroundOffset * sideSign);
+            candidate.y = transform.position.y;
+
+            if (useNavMesh && NavMesh.SamplePosition(candidate, out NavMeshHit navHit, 1f, NavMesh.AllAreas))
+            {
+                return navHit.position;
+            }
+
+            return candidate;
         }
 
         private void MoveTo(Vector3 targetPosition, float desiredStopDistance)
@@ -408,6 +462,9 @@ namespace TinyHunter.MVP.Enemies
 
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(transform.position, stopDistance);
+
+            Gizmos.color = Color.blue;
+            Gizmos.DrawWireSphere(transform.position, Mathf.Max(stopDistance, attackRange + surroundRadiusPadding));
 
             if (!usePatrol || patrolPoints == null) return;
 
