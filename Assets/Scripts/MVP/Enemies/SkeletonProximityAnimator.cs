@@ -195,7 +195,7 @@ namespace TinyHunter.MVP.Enemies
 
             if (!clearAttackPath || crowded)
             {
-                MoveTo(GetApproachPosition(), Mathf.Max(0.05f, attackRange * 0.85f));
+                MoveTo(GetApproachPosition(), Mathf.Max(stopDistance, attackRange));
                 return;
             }
 
@@ -308,10 +308,11 @@ namespace TinyHunter.MVP.Enemies
             }
 
             radial = radial.normalized;
-            float angle = Mathf.Abs(GetInstanceID() % 360);
-            Quaternion spreadRotation = Quaternion.Euler(0f, angle, 0f);
+            float sideSign = (Mathf.Abs(GetInstanceID()) & 1) == 0 ? 1f : -1f;
+            float sidestepAngle = 50f * sideSign;
+            Quaternion spreadRotation = Quaternion.Euler(0f, sidestepAngle, 0f);
             Vector3 spreadDir = (spreadRotation * radial).normalized;
-            Vector3 candidate = playerTarget.position + spreadDir * desiredRadius + spreadDir * (surroundOffset * 0.25f);
+            Vector3 candidate = playerTarget.position + spreadDir * desiredRadius + Vector3.Cross(Vector3.up, radial).normalized * (surroundOffset * sideSign);
             candidate.y = transform.position.y;
 
             if (useNavMesh && NavMesh.SamplePosition(candidate, out NavMeshHit navHit, 1f, NavMesh.AllAreas))
