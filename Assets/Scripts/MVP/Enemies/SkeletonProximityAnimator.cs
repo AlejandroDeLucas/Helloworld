@@ -43,6 +43,10 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private float surroundOffset = 0.8f;
         [SerializeField] private float surroundRadiusPadding = 0.15f;
         [SerializeField] private float crowdCheckRadius = 0.35f;
+        [SerializeField] private int approachSlotCount = 10;
+        [SerializeField] private float approachSampleRadius = 1.25f;
+        [SerializeField] private float approachOccupancyRadius = 0.45f;
+        [SerializeField] private float approachOccupancyPenalty = 1.4f;
 
         [Header("Patrol")]
         [SerializeField] private bool usePatrol;
@@ -196,8 +200,11 @@ namespace TinyHunter.MVP.Enemies
 
             if (!clearAttackPath || crowded)
             {
-                float approachStopDistance = Mathf.Max(0.05f, Mathf.Min(stopDistance, attackRange) * 0.35f);
-                MoveTo(GetApproachPosition(), approachStopDistance);
+                Vector3 approachPosition = GetBestApproachPosition(out bool foundReachableApproach);
+                float approachStopDistance = foundReachableApproach
+                    ? Mathf.Max(0.05f, Mathf.Min(stopDistance, attackRange) * 0.35f)
+                    : Mathf.Max(stopDistance, attackRange * 0.9f);
+                MoveTo(approachPosition, approachStopDistance);
                 return;
             }
 
@@ -323,6 +330,117 @@ namespace TinyHunter.MVP.Enemies
             }
 
             return candidate;
+        }
+
+        private Vector3 GetBestApproachPosition(out bool foundReachableApproach)
+        {
+            foundReachableApproach = false;
+            if (playerTarget == null) return transform.position;
+
+            float desiredRadius = Mathf.Max(0.1f, attackRange - surroundRadiusPadding);
+            Vector3 radial = transform.position - playerTarget.position;
+            radial.y = 0f;
+            if (radial.sqrMagnitude <= 0.001f)
+            {
+                radial = -playerTarget.forward;
+                radial.y = 0f;
+            }
+
+            radial = radial.normalized;
+            Vector3 fallbackCandidate = GetApproachPosition();
+            float fallbackDistanceToPlayer = HorizontalDistanceTo(playerTarget.position);
+
+            Vector3 bestCandidate = fallbackCandidate;
+            float bestScore = float.MaxValue;
+            int slotCount = Mathf.Clamp(approachSlotCount, 4, 24);
+            float baseAngle = Mathf.Atan2(radial.x, radial.z) * Mathf.Rad2Deg;
+
+            for (int i = 0; i < slotCount; i++)
+            {
+                float t = i / (float)slotCount;
+                float angle = baseAngle + 360f * t;
+                Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+                Vector3 rawCandidate = playerTarget.position + dir * desiredRadius;
+                rawCandidate += Vector3.Cross(Vector3.up, dir).normalized * surroundOffset;
+                rawCandidate.y = transform.position.y;
+
+                Vector3 candidate = rawCandidate;
+                if (useNavMesh && NavMesh.SamplePosition(rawCandidate, out NavMeshHit navHit, approachSampleRadius, NavMesh.AllAreas))
+                {
+                    candidate = navHit.position;
+                }
+
+                float candidateDistanceToPlayer = Vector3.Distance(candidate, playerTarget.position);
+                if (candidateDistanceToPlayer < fallbackDistanceToPlayer)
+                {
+                    fallbackDistanceToPlayer = candidateDistanceToPlayer;
+                    fallbackCandidate = candidate;
+                }
+
+                if (useNavMesh && CanUseNavMesh())
+                {
+                    NavMeshPath path = new NavMeshPath();
+                    if (!navigationAgent.CalculatePath(candidate, path) || path.status != NavMeshPathStatus.PathComplete)
+                    {
+                        continue;
+                    }
+
+                    float pathLength = GetPathLength(path);
+                    float occupancyPenalty = GetApproachOccupancyPenalty(candidate);
+                    float score = pathLength + occupancyPenalty * approachOccupancyPenalty;
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        bestCandidate = candidate;
+                        foundReachableApproach = true;
+                    }
+                }
+                else
+                {
+                    float pathLength = HorizontalDistanceTo(candidate);
+                    float occupancyPenalty = GetApproachOccupancyPenalty(candidate);
+                    float score = pathLength + occupancyPenalty * approachOccupancyPenalty;
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        bestCandidate = candidate;
+                        foundReachableApproach = true;
+                    }
+                }
+            }
+
+            return foundReachableApproach ? bestCandidate : fallbackCandidate;
+        }
+
+        private float GetApproachOccupancyPenalty(Vector3 candidate)
+        {
+            int occupiedCount = 0;
+            Collider[] hits = Physics.OverlapSphere(candidate, approachOccupancyRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Transform t = hits[i].transform;
+                if (t == null || t == transform || t.IsChildOf(transform)) continue;
+                if (t == playerTarget || (playerTarget != null && t.IsChildOf(playerTarget))) continue;
+                if (t.gameObject.layer == gameObject.layer)
+                {
+                    occupiedCount++;
+                }
+            }
+
+            return occupiedCount;
+        }
+
+        private static float GetPathLength(NavMeshPath path)
+        {
+            if (path == null || path.corners == null || path.corners.Length <= 1) return 0f;
+
+            float length = 0f;
+            for (int i = 1; i < path.corners.Length; i++)
+            {
+                length += Vector3.Distance(path.corners[i - 1], path.corners[i]);
+            }
+
+            return length;
         }
 
         private void MoveTo(Vector3 targetPosition, float desiredStopDistance)
