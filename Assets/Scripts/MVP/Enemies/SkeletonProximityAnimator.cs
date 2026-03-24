@@ -28,6 +28,7 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private float moveSpeed = 1.5f;
         [SerializeField] private float stopDistance = 1.2f;
         [SerializeField] private bool useNavMesh = true;
+        [SerializeField] private float navMeshSnapDistance = 1f;
         [SerializeField] private LayerMask directMoveBlockers = Physics.DefaultRaycastLayers;
         [SerializeField] private float directMoveCastPadding = 0.05f;
         [SerializeField] private bool rotateTowardTarget = true;
@@ -74,6 +75,7 @@ namespace TinyHunter.MVP.Enemies
         {
             CacheReferences();
             SyncBodyAndAgent();
+            EnsureOnNavMesh();
         }
 
         private void Awake()
@@ -84,6 +86,7 @@ namespace TinyHunter.MVP.Enemies
 
         private void OnEnable()
         {
+            EnsureOnNavMesh();
             if (playRespawnSequenceOnEnable)
             {
                 BeginRespawnSequence();
@@ -442,6 +445,17 @@ namespace TinyHunter.MVP.Enemies
             return offset.magnitude;
         }
 
+
+        private void EnsureOnNavMesh()
+        {
+            if (!useNavMesh || navigationAgent == null || !navigationAgent.enabled || navigationAgent.isOnNavMesh) return;
+
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, navMeshSnapDistance, NavMesh.AllAreas))
+            {
+                navigationAgent.Warp(hit.position);
+            }
+        }
+
         private bool CanUseNavMesh()
         {
             return navigationAgent != null && navigationAgent.enabled && navigationAgent.isOnNavMesh;
@@ -491,6 +505,8 @@ namespace TinyHunter.MVP.Enemies
                 navigationAgent.radius = colliderRadius;
                 navigationAgent.height = colliderHeight;
                 navigationAgent.stoppingDistance = stopDistance;
+                navigationAgent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+                navigationAgent.avoidancePriority = 20 + Mathf.Abs(GetInstanceID() % 60);
             }
         }
 
