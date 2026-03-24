@@ -180,14 +180,21 @@ namespace TinyHunter.MVP.Enemies
                 RotateToward(playerTarget.position);
             }
 
-            if (distanceToPlayer <= attackRange && HasClearAttackPath())
+            bool clearAttackPath = HasClearAttackPath();
+            if (distanceToPlayer <= attackRange && clearAttackPath)
             {
                 StopMoving();
                 TryAttack();
                 return;
             }
 
-            MoveTo(GetApproachPosition(), Mathf.Max(stopDistance, attackRange));
+            if (!clearAttackPath)
+            {
+                MoveTo(GetApproachPosition(), 0.05f);
+                return;
+            }
+
+            MoveTo(playerTarget.position, Mathf.Max(stopDistance, attackRange));
         }
 
         private void UpdatePatrol()
@@ -248,7 +255,7 @@ namespace TinyHunter.MVP.Enemies
         {
             if (playerTarget == null) return transform.position;
 
-            float desiredRadius = Mathf.Max(stopDistance, attackRange + surroundRadiusPadding);
+            float desiredRadius = Mathf.Max(0.1f, attackRange - surroundRadiusPadding);
             Vector3 radial = transform.position - playerTarget.position;
             radial.y = 0f;
             if (radial.sqrMagnitude <= 0.001f)
@@ -462,9 +469,6 @@ namespace TinyHunter.MVP.Enemies
 
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(transform.position, stopDistance);
-
-            Gizmos.color = Color.blue;
-            Gizmos.DrawWireSphere(transform.position, Mathf.Max(stopDistance, attackRange + surroundRadiusPadding));
 
             if (!usePatrol || patrolPoints == null) return;
 
