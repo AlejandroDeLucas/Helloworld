@@ -186,7 +186,8 @@ namespace TinyHunter.MVP.Enemies
 
             bool clearAttackPath = HasClearAttackPath();
             bool crowded = IsCrowdedAtAttackPosition();
-            if (distanceToPlayer <= attackRange && clearAttackPath && !crowded)
+            bool forceAttackAtCloseRange = distanceToPlayer <= Mathf.Max(0.75f, attackRange * 0.6f);
+            if (distanceToPlayer <= attackRange && clearAttackPath && (!crowded || forceAttackAtCloseRange))
             {
                 StopMoving();
                 TryAttack();
@@ -195,7 +196,8 @@ namespace TinyHunter.MVP.Enemies
 
             if (!clearAttackPath || crowded)
             {
-                MoveTo(GetApproachPosition(), Mathf.Max(stopDistance, attackRange));
+                float approachStopDistance = Mathf.Max(0.05f, Mathf.Min(stopDistance, attackRange) * 0.35f);
+                MoveTo(GetApproachPosition(), approachStopDistance);
                 return;
             }
 
