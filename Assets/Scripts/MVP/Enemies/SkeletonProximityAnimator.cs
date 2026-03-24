@@ -269,13 +269,26 @@ namespace TinyHunter.MVP.Enemies
             float distance = direction.magnitude;
             if (distance <= 0.01f) return true;
 
-            if (!Physics.Raycast(origin, direction.normalized, out RaycastHit hit, distance, attackBlockers, QueryTriggerInteraction.Ignore))
+            RaycastHit[] hits = Physics.RaycastAll(origin, direction.normalized, distance, attackBlockers, QueryTriggerInteraction.Ignore);
+            if (hits == null || hits.Length == 0) return true;
+
+            float closestDistance = float.MaxValue;
+            Transform closestHit = null;
+            for (int i = 0; i < hits.Length; i++)
             {
-                return true;
+                Transform hitTransform = hits[i].transform;
+                if (hitTransform == null) continue;
+                if (hitTransform == transform || hitTransform.IsChildOf(transform)) continue;
+
+                if (hits[i].distance < closestDistance)
+                {
+                    closestDistance = hits[i].distance;
+                    closestHit = hitTransform;
+                }
             }
 
-            Transform hitTransform = hit.transform;
-            return hitTransform == playerTarget || hitTransform.IsChildOf(playerTarget);
+            if (closestHit == null) return true;
+            return closestHit == playerTarget || closestHit.IsChildOf(playerTarget);
         }
 
         private Vector3 GetApproachPosition()
