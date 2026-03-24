@@ -41,6 +41,7 @@ namespace TinyHunter.MVP.Enemies
         [SerializeField] private float attackPathHeight = 1f;
         [SerializeField] private float surroundOffset = 0.8f;
         [SerializeField] private float surroundRadiusPadding = 0.15f;
+        [SerializeField] private float crowdCheckRadius = 0.35f;
 
         [Header("Patrol")]
         [SerializeField] private bool usePatrol;
@@ -181,16 +182,17 @@ namespace TinyHunter.MVP.Enemies
             }
 
             bool clearAttackPath = HasClearAttackPath();
-            if (distanceToPlayer <= attackRange && clearAttackPath)
+            bool crowded = IsCrowdedAtAttackPosition();
+            if (distanceToPlayer <= attackRange && clearAttackPath && !crowded)
             {
                 StopMoving();
                 TryAttack();
                 return;
             }
 
-            if (!clearAttackPath)
+            if (!clearAttackPath || crowded)
             {
-                MoveTo(GetApproachPosition(), 0.05f);
+                MoveTo(GetApproachPosition(), Mathf.Max(0.05f, attackRange * 0.85f));
                 return;
             }
 
@@ -232,6 +234,31 @@ namespace TinyHunter.MVP.Enemies
         }
 
 
+
+        private bool IsCrowdedAtAttackPosition()
+        {
+            if (playerTarget == null) return false;
+
+            Vector3 toPlayer = playerTarget.position - transform.position;
+            toPlayer.y = 0f;
+            if (toPlayer.sqrMagnitude <= 0.001f) return false;
+
+            Vector3 checkCenter = transform.position + toPlayer.normalized * Mathf.Max(0.2f, attackRange * 0.7f);
+            Collider[] hits = Physics.OverlapSphere(checkCenter, crowdCheckRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Transform t = hits[i].transform;
+                if (t == null || t == transform || t.IsChildOf(transform)) continue;
+                if (t == playerTarget || t.IsChildOf(playerTarget)) continue;
+                if (t.gameObject.layer == gameObject.layer)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private bool HasClearAttackPath()
         {
             if (!requireClearAttackPath || playerTarget == null) return true;
@@ -265,9 +292,10 @@ namespace TinyHunter.MVP.Enemies
             }
 
             radial = radial.normalized;
-            Vector3 tangent = Vector3.Cross(Vector3.up, radial).normalized;
-            float sideSign = (Mathf.Abs(GetInstanceID()) & 1) == 0 ? 1f : -1f;
-            Vector3 candidate = playerTarget.position + radial * desiredRadius + tangent * (surroundOffset * sideSign);
+            float angle = Mathf.Abs(GetInstanceID() % 360);
+            Quaternion spreadRotation = Quaternion.Euler(0f, angle, 0f);
+            Vector3 spreadDir = (spreadRotation * radial).normalized;
+            Vector3 candidate = playerTarget.position + spreadDir * desiredRadius + spreadDir * (surroundOffset * 0.25f);
             candidate.y = transform.position.y;
 
             if (useNavMesh && NavMesh.SamplePosition(candidate, out NavMeshHit navHit, 1f, NavMesh.AllAreas))
